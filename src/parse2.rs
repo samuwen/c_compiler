@@ -226,21 +226,26 @@ impl Node<String> {
 
   fn add_expression_log(&self) -> String {
     let mut out_string = String::new();
+    let mut add_str = |s| {
+      out_string.push_str(" ");
+      out_string.push_str(s);
+    };
     if self.data.len() > 0 {
       for d in self.data.iter() {
-        out_string.push_str(" ");
-        out_string.push_str(&d);
+        add_str(&d);
       }
     }
-    let mut list = self.get_data_nodes(0, vec![]);
-    // list.sort();
+    let list = self.get_data_nodes(0, vec![]);
     debug!("{:?}", list);
-    list.iter().for_each(|d| {
-      d.get_data().iter().for_each(|e| {
-        out_string.push_str(" ");
-        out_string.push_str(e);
-      })
-    });
+    let mut int_iter = list.iter().filter(|t| t.get_type() != "Operator");
+    let mut op_iter = list.iter().filter(|t| t.get_type() != "Integer");
+    for i in 0..list.len() {
+      let cd = match i % 2 == 0 {
+        true => int_iter.next().unwrap(),
+        false => op_iter.next().unwrap(),
+      };
+      cd.get_data().iter().for_each(|d| add_str(d));
+    }
     out_string
   }
 
@@ -285,8 +290,8 @@ impl Display for Node<String> {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ChildData {
-  level_count: usize,
   data: Vec<String>,
+  level_count: usize,
   _type: String,
 }
 
