@@ -444,23 +444,42 @@ impl Node<String> {
       vec![NodeType::AndExpression, NodeType::BinaryOp],
       fns,
     );
-    // for child in self.children.iter() {
-    //   let f = match child.get_type() {
-    //     NodeType::BinaryOp => Node::get_binary_op_asm,
-    //     NodeType::UnaryOp => Node::get_unary_op_asm,
-    //     NodeType::Term => Node::get_term_asm,
-    //     _ => panic!(
-    //       "Invalid child type in {}: {}",
-    //       self.get_type().as_str(),
-    //       child.get_type().as_str()
-    //     ),
-    //   };
-    //   f(child, out_vec);
-    // }
   }
 
   fn get_logical_and_asm(&self, out_vec: &mut Vec<String>) {
-    // stub
+    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
+      vec![Node::get_equality_asm, Node::get_binary_op_asm];
+    self.get_generic_asm(
+      out_vec,
+      vec![NodeType::EqualityExpression, NodeType::BinaryOp],
+      fns,
+    );
+  }
+
+  fn get_equality_asm(&self, out_vec: &mut Vec<String>) {
+    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
+      vec![Node::get_relational_asm, Node::get_binary_op_asm];
+    self.get_generic_asm(
+      out_vec,
+      vec![NodeType::RelationalExpression, NodeType::BinaryOp],
+      fns,
+    );
+  }
+
+  fn get_relational_asm(&self, out_vec: &mut Vec<String>) {
+    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
+      vec![Node::get_additive_asm, Node::get_binary_op_asm];
+    self.get_generic_asm(
+      out_vec,
+      vec![NodeType::AdditiveExpression, NodeType::BinaryOp],
+      fns,
+    );
+  }
+
+  fn get_additive_asm(&self, out_vec: &mut Vec<String>) {
+    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
+      vec![Node::get_term_asm, Node::get_binary_op_asm];
+    self.get_generic_asm(out_vec, vec![NodeType::Term, NodeType::BinaryOp], fns);
   }
 
   fn get_term_asm(&self, out_vec: &mut Vec<String>) {
@@ -513,9 +532,7 @@ impl Node<String> {
   }
 
   fn add_arith_stack_asm(&self, out_vec: &mut Vec<String>) {
-    // add to the second to last element, so a mov then a stack push
-    // realy hoping this works lol
-    out_vec.insert(out_vec.len() - 2, format!("\tpush\t%eax"));
+    out_vec.insert(out_vec.len() - 1, format!("\tpush\t%eax"));
     out_vec.push(format!("\tpop\t%ecx"));
   }
 

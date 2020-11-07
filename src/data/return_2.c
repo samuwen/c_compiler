@@ -1,4 +1,4 @@
 int main()
 {
-  return 2 / 1;
+  return ~(1 + 1);
 }
