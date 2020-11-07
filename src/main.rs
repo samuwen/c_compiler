@@ -39,4 +39,8 @@ fn main() {
       .expect("Failed to delete file");
     debug!("delete: {}", delete_result.status);
   }
+  let run_output = Command::new("./out")
+    .output()
+    .expect("Failed to run program");
+  debug!("program run: {}", run_output.status);
 }

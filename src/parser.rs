@@ -4,11 +4,18 @@ use serde::Serialize;
 use serde_json::to_string;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 const DATA_TYPE_INDEX: usize = 0;
 const FUNCTION_NAME_INDEX: usize = 1;
 const OPAREN_INDEX: usize = 2;
 const CPAREN_INDEX: usize = 3;
+
+static COUNT: AtomicUsize = AtomicUsize::new(0);
+
+fn get_next_label() -> String {
+  format!("label{}", COUNT.fetch_add(1, Ordering::Relaxed))
+}
 
 // <program> ::= <function>
 #[derive(Debug)]
@@ -381,10 +388,22 @@ impl Node<String> {
       Node::add_term_log,
       Node::add_factor_log,
       Node::add_binary_op_log,
+      Node::add_equality_log,
+      Node::add_relational_log,
+      Node::add_additive_log,
+      Node::add_logical_and_log,
     ];
     self.add_generic_log(
       out_vec,
-      vec![NodeType::Term, NodeType::Factor, NodeType::BinaryOp],
+      vec![
+        NodeType::Term,
+        NodeType::Factor,
+        NodeType::BinaryOp,
+        NodeType::EqualityExpression,
+        NodeType::RelationalExpression,
+        NodeType::AdditiveExpression,
+        NodeType::AndExpression,
+      ],
       fns,
     )
   }
@@ -399,6 +418,8 @@ impl Node<String> {
   fn add_integer_log(&self, out_vec: &mut Vec<String>) {
     out_vec.push(self.data.join(" "))
   }
+
+  // ===================== Assembly builder statements ====================
 
   pub fn get_function_asm(&self, out_vec: &mut Vec<String>) {
     let name = self.data.get(1).unwrap();
@@ -497,6 +518,9 @@ impl Node<String> {
       Node::get_factor_asm,
       Node::get_binary_op_asm,
       Node::get_equality_asm,
+      Node::get_relational_asm,
+      Node::get_additive_asm,
+      Node::get_logical_and_asm,
     ];
     self.get_generic_asm(
       out_vec,
@@ -505,9 +529,17 @@ impl Node<String> {
         NodeType::Factor,
         NodeType::BinaryOp,
         NodeType::EqualityExpression,
+        NodeType::RelationalExpression,
+        NodeType::AdditiveExpression,
+        NodeType::AndExpression,
       ],
       fns,
     );
+    let mut handle_comparison = || {
+      self.add_arith_stack_asm(out_vec);
+      out_vec.push(format!("\tcmpl\t%eax, %ecx"));
+      out_vec.push(format!("\tmovl\t$0, %eax"));
+    };
     match self.data.get(0).unwrap().as_str() {
       "+" => {
         self.add_arith_stack_asm(out_vec);
@@ -529,7 +561,60 @@ impl Node<String> {
         out_vec.push(format!("\tcdq"));
         out_vec.push(format!("\tidivl\t%ecx"));
       }
-      _ => panic!("hurp"),
+      "==" => {
+        handle_comparison();
+        out_vec.push(format!("\tsete\t%al"));
+      }
+      "!=" => {
+        handle_comparison();
+        out_vec.push(format!("\tsetne\t%al"));
+      }
+      ">" => {
+        handle_comparison();
+        out_vec.push(format!("\tsetg\t%al"));
+      }
+      ">=" => {
+        handle_comparison();
+        out_vec.push(format!("\tsetge\t%al"));
+      }
+      "<" => {
+        handle_comparison();
+        out_vec.push(format!("\tsetl\t%al"));
+      }
+      "<=" => {
+        handle_comparison();
+        out_vec.push(format!("\tsetle\t%al"));
+      }
+      "||" => {
+        let label1 = get_next_label();
+        let label2 = get_next_label();
+        let last_arith_ele = out_vec.remove(out_vec.len() - 1);
+        out_vec.push(format!("\tcmpl\t$0, %eax"));
+        out_vec.push(format!("\tje\t{}", label1));
+        out_vec.push(format!("\tmovl\t$1, %eax"));
+        out_vec.push(format!("\tjmp\t{}", label2));
+        out_vec.push(format!("{}:", label1));
+        out_vec.push(last_arith_ele.to_owned());
+        out_vec.push(format!("\tcmpl\t$0, %eax"));
+        out_vec.push(format!("\tmovl\t$0, %eax"));
+        out_vec.push(format!("\tsetne\t%al"));
+        out_vec.push(format!("{}:", label2));
+      }
+      "&&" => {
+        let label1 = get_next_label();
+        let label2 = get_next_label();
+        let last_arith_ele = out_vec.remove(out_vec.len() - 1);
+        out_vec.push(format!("\tcmpl\t$0, %eax"));
+        out_vec.push(format!("\tjne\t{}", label1));
+        out_vec.push(format!("\tjmp\t{}", label2));
+        out_vec.push(format!("{}:", label1));
+        out_vec.push(last_arith_ele.to_owned());
+        out_vec.push(format!("\tcmpl\t$0, %eax"));
+        out_vec.push(format!("\tmovl\t$0, %eax"));
+        out_vec.push(format!("\tsetne\t%al"));
+        out_vec.push(format!("{}:", label2));
+      }
+      _ => panic!("Couldn't find assembly for op: {}", self.data[0]),
     }
   }
 
