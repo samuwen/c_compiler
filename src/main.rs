@@ -7,7 +7,7 @@ use flexi_logger::*;
 use generator::generate;
 use lexer::lex;
 use log::*;
-use parser::{parse, Node, Prog};
+use parser::{parse, Prog};
 use std::env;
 use std::fs::{read_to_string, write};
 use std::process::Command;

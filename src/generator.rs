@@ -1,4 +1,3 @@
-use crate::Node;
 use crate::Prog;
 
 pub fn generate(ast: Prog) -> String {
