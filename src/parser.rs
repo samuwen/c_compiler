@@ -96,45 +96,93 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
   n
 }
 
-// <exp> ::= <term> { ("+" | "-") <term> }
+// <exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
 fn parse_expression(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::Expression);
-  let error_message = "Unexpected termination of tokens";
-  let mut term = parse_term(tokens);
-  let next = tokens.get(0).expect(error_message);
-  let mut next_type = next.get_type().clone();
-  while next_type == TokenType::Addition || next_type == TokenType::Negation {
-    let op = tokens.remove(0);
-    let next_term = parse_term(tokens);
-    let mut bin_op = Node::new(NodeType::BinaryOp);
-    bin_op.add_data(op.get_value());
-    bin_op.add_child(term);
-    bin_op.add_child(next_term);
-    term = bin_op;
-    next_type = tokens.get(0).expect(error_message).get_type().clone();
-  }
-  n.add_child(term);
-  n
+  parse_exp(
+    tokens,
+    NodeType::Expression,
+    vec![TokenType::Or],
+    parse_logical_and_exp,
+  )
+}
+
+// <logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
+fn parse_logical_and_exp(tokens: &mut Vec<Token>) -> Node<String> {
+  parse_exp(
+    tokens,
+    NodeType::AndExpression,
+    vec![TokenType::And],
+    parse_equality_exp,
+  )
+}
+
+// <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
+fn parse_equality_exp(tokens: &mut Vec<Token>) -> Node<String> {
+  parse_exp(
+    tokens,
+    NodeType::EqualityExpression,
+    vec![TokenType::Equal, TokenType::NotEqual],
+    parse_relational_exp,
+  )
+}
+
+// <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
+fn parse_relational_exp(tokens: &mut Vec<Token>) -> Node<String> {
+  parse_exp(
+    tokens,
+    NodeType::RelationalExpression,
+    vec![
+      TokenType::GreaterThan,
+      TokenType::GreaterThanOrEqual,
+      TokenType::LessThan,
+      TokenType::LessThanOrEqual,
+    ],
+    parse_additive_exp,
+  )
+}
+
+// <additive-exp> ::= <term> { ("+" | "-") <term> }
+fn parse_additive_exp(tokens: &mut Vec<Token>) -> Node<String> {
+  parse_exp(
+    tokens,
+    NodeType::AdditiveExpression,
+    vec![TokenType::Addition, TokenType::Negation],
+    parse_term,
+  )
 }
 
 // <term> ::= <factor> { ("*" | "/") <factor> }
 fn parse_term(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::Term);
+  parse_exp(
+    tokens,
+    NodeType::Term,
+    vec![TokenType::Multiplication, TokenType::Division],
+    parse_factor,
+  )
+}
+
+fn parse_exp<F: Fn(&mut Vec<Token>) -> Node<String>>(
+  tokens: &mut Vec<Token>,
+  n_type: NodeType,
+  t_types: Vec<TokenType>,
+  f: F,
+) -> Node<String> {
+  let mut n = Node::new(n_type);
   let error_message = "Unexpected termination of tokens";
-  let mut factor = parse_factor(tokens);
+  let mut exp = f(tokens);
   let next = tokens.get(0).expect(error_message);
   let mut next_type = next.get_type().clone();
-  while next_type == TokenType::Multiplication || next_type == TokenType::Division {
+  while t_types.contains(&next_type) {
     let op = tokens.remove(0);
-    let next_factor = parse_factor(tokens);
+    let next_exp = f(tokens);
     let mut bin_op = Node::new(NodeType::BinaryOp);
     bin_op.add_data(op.get_value());
-    bin_op.add_child(factor);
-    bin_op.add_child(next_factor);
-    factor = bin_op;
+    bin_op.add_child(exp);
+    bin_op.add_child(next_exp);
+    exp = bin_op;
     next_type = tokens.get(0).expect(error_message).get_type().clone();
   }
-  n.add_child(factor);
+  n.add_child(exp);
   n
 }
 
@@ -217,6 +265,138 @@ impl Node<String> {
     )
   }
 
+  fn add_statement_log(&self) -> String {
+    let mut out_string = self.data[0].to_ascii_uppercase().to_owned();
+    for child in self.children.iter() {
+      &child.add_expression_log(&mut out_string);
+    }
+    format!("\t\t{} {}\n", out_string, self.data[1])
+  }
+
+  fn add_generic_log<F: Fn(&Node<String>, &mut String)>(
+    &self,
+    out_string: &mut String,
+    n_types: Vec<NodeType>,
+    fs: Vec<F>,
+  ) {
+    for child in self.children.iter() {
+      let position = n_types.iter().position(|n| n == child.get_type());
+      if let Some(pos) = position {
+        let f = fs
+          .get(pos)
+          .expect("Unequal count of node types and functions");
+        f(child, out_string);
+      } else {
+        panic!(
+          "Invalid child type in {}: {}",
+          self.get_type().as_str(),
+          child.get_type().as_str()
+        );
+      }
+    }
+  }
+
+  fn add_expression_log(&self, out_string: &mut String) {
+    if self.data.len() > 0 {
+      out_string.push_str(self.data.get(0).unwrap());
+    }
+    let fns: Vec<fn(&Node<String>, &mut String)> =
+      vec![Node::add_logical_and_log, Node::add_binary_op_log];
+    self.add_generic_log(
+      out_string,
+      vec![NodeType::AndExpression, NodeType::BinaryOp],
+      fns,
+    );
+    if self.data.len() > 0 {
+      out_string.push_str(self.data.last().unwrap());
+    }
+  }
+
+  fn add_logical_and_log(&self, out_string: &mut String) {
+    let fns: Vec<fn(&Node<String>, &mut String)> =
+      vec![Node::add_equality_log, Node::add_binary_op_log];
+    self.add_generic_log(
+      out_string,
+      vec![NodeType::EqualityExpression, NodeType::BinaryOp],
+      fns,
+    );
+  }
+
+  fn add_equality_log(&self, out_string: &mut String) {
+    let fns: Vec<fn(&Node<String>, &mut String)> =
+      vec![Node::add_relational_log, Node::add_binary_op_log];
+    self.add_generic_log(
+      out_string,
+      vec![NodeType::RelationalExpression, NodeType::BinaryOp],
+      fns,
+    );
+  }
+
+  fn add_relational_log(&self, out_string: &mut String) {
+    let fns: Vec<fn(&Node<String>, &mut String)> =
+      vec![Node::add_additive_log, Node::add_binary_op_log];
+    self.add_generic_log(
+      out_string,
+      vec![NodeType::AdditiveExpression, NodeType::BinaryOp],
+      fns,
+    );
+  }
+
+  fn add_additive_log(&self, out_string: &mut String) {
+    let fns: Vec<fn(&Node<String>, &mut String)> =
+      vec![Node::add_term_log, Node::add_binary_op_log];
+    self.add_generic_log(out_string, vec![NodeType::Term, NodeType::BinaryOp], fns);
+  }
+
+  fn add_term_log(&self, out_string: &mut String) {
+    let fns: Vec<fn(&Node<String>, &mut String)> =
+      vec![Node::add_binary_op_log, Node::add_factor_log];
+    self.add_generic_log(out_string, vec![NodeType::BinaryOp, NodeType::Factor], fns);
+  }
+
+  fn add_factor_log(&self, out_string: &mut String) {
+    let fns: Vec<fn(&Node<String>, &mut String)> = vec![
+      Node::add_expression_log,
+      Node::add_unary_op_log,
+      Node::add_integer_log,
+    ];
+    self.add_generic_log(
+      out_string,
+      vec![NodeType::Expression, NodeType::UnaryOp, NodeType::Integer],
+      fns,
+    );
+  }
+
+  fn add_binary_op_log(&self, out_string: &mut String) {
+    for (i, child) in self.children.iter().enumerate() {
+      if i == 1 {
+        // janky
+        out_string.push_str(self.data.get(0).expect("Binary op has no op"));
+      }
+      let f = match child.get_type() {
+        NodeType::Term => Node::add_term_log,
+        NodeType::Factor => Node::add_factor_log,
+        NodeType::BinaryOp => Node::add_binary_op_log,
+        _ => panic!(
+          "Invalid child type in binary op: {}",
+          child.get_type().as_str()
+        ),
+      };
+      f(child, out_string);
+    }
+  }
+
+  fn add_unary_op_log(&self, out_string: &mut String) {
+    out_string.push_str(self.data.get(0).expect("Unary op has no op"));
+    for child in self.children.iter() {
+      child.add_factor_log(out_string);
+    }
+  }
+
+  fn add_integer_log(&self, out_string: &mut String) {
+    out_string.push_str(&self.data.join(" "))
+  }
+
   pub fn get_function_asm(&self) -> String {
     let mut out_string = String::new();
     let name = self.data.get(1).unwrap();
@@ -228,47 +408,12 @@ impl Node<String> {
     out_string
   }
 
-  fn add_statement_log(&self) -> String {
-    let mut out_string = self.data[0].to_ascii_uppercase().to_owned();
-    for child in self.children.iter() {
-      out_string.push_str(&child.add_expression_log());
-    }
-    format!("\t\t{} {}\n", out_string, self.data[1])
-  }
-
   fn get_statement_asm(&self) -> String {
     let mut out_string = String::new();
     for child in self.children.iter() {
       out_string.push_str(&child.get_expression_asm());
     }
     out_string.push_str("\tret\n");
-    out_string
-  }
-
-  fn add_expression_log(&self) -> String {
-    let mut out_string = String::new();
-    let mut result = vec![];
-    let mut has_parens = false;
-    if self.data.len() > 0 {
-      has_parens = true;
-    }
-    for child in self.children.iter() {
-      let f = match child.get_type() {
-        NodeType::BinaryOp => Node::add_binary_op_log,
-        NodeType::UnaryOp => Node::add_unary_op_log,
-        NodeType::Term => Node::add_term_log,
-        _ => panic!(
-          "Invalid child type in expression: {}",
-          child.get_type().as_str()
-        ),
-      };
-      result.push(f(child));
-    }
-    if has_parens {
-      result.insert(0, self.data.get(0).unwrap().to_owned());
-      result.push(self.data.last().unwrap().to_owned());
-    }
-    out_string.push_str(&result.join(""));
     out_string
   }
 
@@ -289,19 +434,6 @@ impl Node<String> {
     out_string
   }
 
-  fn add_term_log(&self) -> String {
-    let mut out_string = String::new();
-    for child in self.children.iter() {
-      let f = match child.get_type() {
-        NodeType::BinaryOp => Node::add_binary_op_log,
-        NodeType::Factor => Node::add_factor_log,
-        _ => panic!("Invalid child type in Term: {}", child.get_type().as_str()),
-      };
-      out_string.push_str(&f(child));
-    }
-    out_string
-  }
-
   fn get_term_asm(&self) -> String {
     let mut out_string = String::new();
     for child in self.children.iter() {
@@ -312,26 +444,6 @@ impl Node<String> {
       };
       out_string.push_str(&f(child));
     }
-    out_string
-  }
-
-  fn add_binary_op_log(&self) -> String {
-    let mut out_string = String::new();
-    let mut result: Vec<String> = vec![];
-    for child in self.children.iter() {
-      let f = match child.get_type() {
-        NodeType::Term => Node::add_term_log,
-        NodeType::Factor => Node::add_factor_log,
-        NodeType::BinaryOp => Node::add_binary_op_log,
-        _ => panic!(
-          "Invalid child type in binary op: {}",
-          child.get_type().as_str()
-        ),
-      };
-      result.push(f(child));
-    }
-    result.insert(1, self.data.get(0).expect("Binary op has no op").to_owned());
-    out_string.push_str(&result.join(" "));
     out_string
   }
 
@@ -386,23 +498,6 @@ impl Node<String> {
     out_string
   }
 
-  fn add_factor_log(&self) -> String {
-    let mut out_string = String::new();
-    for child in self.children.iter() {
-      let f = match child.get_type() {
-        NodeType::Expression => Node::add_expression_log,
-        NodeType::UnaryOp => Node::add_unary_op_log,
-        NodeType::Integer => Node::add_integer_log,
-        _ => panic!(
-          "Invalid child type in factor: {}",
-          child.get_type().as_str()
-        ),
-      };
-      out_string.push_str(&f(child));
-    }
-    out_string
-  }
-
   fn get_factor_asm(&self) -> String {
     let mut out_string = String::new();
     for child in self.children.iter() {
@@ -417,19 +512,6 @@ impl Node<String> {
       };
       out_string.push_str(&f(child));
     }
-    out_string
-  }
-
-  fn add_unary_op_log(&self) -> String {
-    let mut out_string = String::new();
-    let mut result: Vec<String> = vec![
-      String::from(" "),
-      self.data.get(0).expect("Unary op has no op").to_owned(),
-    ];
-    for child in self.children.iter() {
-      result.push(child.add_factor_log());
-    }
-    out_string.push_str(&result.join(""));
     out_string
   }
 
@@ -451,21 +533,21 @@ impl Node<String> {
     out_string
   }
 
-  fn add_integer_log(&self) -> String {
-    String::from(&self.data.join(" "))
-  }
-
   fn get_integer_asm(&self) -> String {
     format!("\tmovl\t${}, %eax\n", self.data.join(""))
   }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Eq, PartialEq)]
 pub enum NodeType {
   Program,
   Function,
   Statement,
   Expression,
+  AndExpression,
+  EqualityExpression,
+  RelationalExpression,
+  AdditiveExpression,
   Term,
   Factor,
   Integer,
@@ -485,6 +567,10 @@ impl NodeType {
       NodeType::Integer => "Integer",
       NodeType::UnaryOp => "UnaryOp",
       NodeType::BinaryOp => "BinaryOp",
+      NodeType::AndExpression => "AndExpression",
+      NodeType::EqualityExpression => "EqualityExpression",
+      NodeType::RelationalExpression => "RelationalExpression",
+      NodeType::AdditiveExpression => "AdditiveExpression",
     }
   }
 }

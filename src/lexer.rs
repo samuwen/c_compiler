@@ -20,7 +20,7 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "\\*", TokenType::Multiplication));
   total.append(&mut find_tokens(&f, "/", TokenType::Division));
   total.append(&mut find_tokens(&f, "&&", TokenType::And));
-  total.append(&mut find_tokens(&f, "||", TokenType::Or));
+  total.append(&mut find_tokens(&f, "\\|\\|", TokenType::Or));
   total.append(&mut find_tokens(&f, "==", TokenType::Equal));
   total.append(&mut find_tokens(&f, "!=", TokenType::NotEqual));
   total.append(&mut find_tokens(&f, ">", TokenType::LessThan));
@@ -29,7 +29,7 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "<=", TokenType::GreaterThanOrEqual));
   total.sort();
   total.dedup();
-  trace!("{:?}", total);
+  warn!("{:?}", total);
   total
 }
 
