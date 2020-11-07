@@ -5,6 +5,11 @@ use serde_json::to_string;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
+const DATA_TYPE_INDEX: usize = 0;
+const FUNCTION_NAME_INDEX: usize = 1;
+const OPAREN_INDEX: usize = 2;
+const CPAREN_INDEX: usize = 3;
+
 // <program> ::= <function>
 #[derive(Debug)]
 pub struct Prog {
@@ -205,10 +210,10 @@ impl Node<String> {
   fn add_function_log(&self) -> String {
     format!(
       "FUN {} {}:\n\tparams: {}{}\n\tbody:\n",
-      self.data[0].to_ascii_uppercase(),
-      self.data[1],
-      self.data[2],
-      self.data[3]
+      self.data[DATA_TYPE_INDEX].to_ascii_uppercase(),
+      self.data[FUNCTION_NAME_INDEX],
+      self.data[OPAREN_INDEX],
+      self.data[CPAREN_INDEX]
     )
   }
 
