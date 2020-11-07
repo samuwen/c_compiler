@@ -63,6 +63,14 @@ pub enum TokenType {
   Addition,
   Multiplication,
   Division,
+  And,
+  Or,
+  Equal,
+  NotEqual,
+  LessThan,
+  GreaterThan,
+  LessThanOrEqual,
+  GreaterThanOrEqual,
 }
 
 impl TokenType {
@@ -83,6 +91,14 @@ impl TokenType {
       TokenType::Addition => "+",
       TokenType::Multiplication => "*",
       TokenType::Division => "/",
+      TokenType::And => "&&",
+      TokenType::Or => "||",
+      TokenType::Equal => "==",
+      TokenType::NotEqual => "!=",
+      TokenType::LessThan => "<",
+      TokenType::LessThanOrEqual => "<=",
+      TokenType::GreaterThan => ">",
+      TokenType::GreaterThanOrEqual => ">=",
     })
   }
 }
