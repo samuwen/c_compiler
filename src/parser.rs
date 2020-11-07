@@ -192,10 +192,6 @@ impl<T> Node<T> {
     self.data.push(data);
   }
 
-  pub fn get_data(&self) -> &Vec<T> {
-    &self.data
-  }
-
   pub fn get_children(&self) -> &Vec<Node<T>> {
     &self.children
   }
@@ -460,7 +456,7 @@ impl Node<String> {
 }
 
 #[derive(Debug, Serialize)]
-enum NodeType {
+pub enum NodeType {
   Program,
   Function,
   Statement,
