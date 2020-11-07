@@ -29,7 +29,7 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "<=", TokenType::GreaterThanOrEqual));
   total.sort();
   total.dedup();
-  warn!("{:?}", total);
+  trace!("{:?}", total);
   total
 }
 

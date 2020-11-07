@@ -397,59 +397,84 @@ impl Node<String> {
     out_string.push_str(&self.data.join(" "))
   }
 
-  pub fn get_function_asm(&self) -> String {
-    let mut out_string = String::new();
+  pub fn get_function_asm(&self, out_vec: &mut Vec<String>) {
     let name = self.data.get(1).unwrap();
-    out_string.push_str(&format!(".globl {}\n", name));
-    out_string.push_str(&format!("{}:\n", name));
+    out_vec.push(format!(".globl {}", name));
+    out_vec.push(format!("{}:", name));
     for statement in self.children.iter() {
-      out_string.push_str(&statement.get_statement_asm());
+      statement.get_statement_asm(out_vec);
     }
-    out_string
   }
 
-  fn get_statement_asm(&self) -> String {
-    let mut out_string = String::new();
+  fn get_statement_asm(&self, out_vec: &mut Vec<String>) {
     for child in self.children.iter() {
-      out_string.push_str(&child.get_expression_asm());
+      child.get_expression_asm(out_vec);
     }
-    out_string.push_str("\tret\n");
-    out_string
+    out_vec.push(format!("\tret"));
   }
 
-  fn get_expression_asm(&self) -> String {
-    let mut out_string = String::new();
+  fn get_generic_asm<F: Fn(&Node<String>, &mut Vec<String>)>(
+    &self,
+    out_vec: &mut Vec<String>,
+    n_types: Vec<NodeType>,
+    fs: Vec<F>,
+  ) {
     for child in self.children.iter() {
-      let f = match child.get_type() {
-        NodeType::BinaryOp => Node::get_binary_op_asm,
-        NodeType::UnaryOp => Node::get_unary_op_asm,
-        NodeType::Term => Node::get_term_asm,
-        _ => panic!(
-          "Invalid child type in expression: {}",
+      let position = n_types.iter().position(|n| n == child.get_type());
+      if let Some(pos) = position {
+        let f = fs
+          .get(pos)
+          .expect("Unequal count of node types and functions");
+        f(child, out_vec);
+      } else {
+        panic!(
+          "Invalid child type in {}: {}",
+          self.get_type().as_str(),
           child.get_type().as_str()
-        ),
-      };
-      out_string.push_str(&f(child));
+        );
+      }
     }
-    out_string
   }
 
-  fn get_term_asm(&self) -> String {
-    let mut out_string = String::new();
+  fn get_expression_asm(&self, out_vec: &mut Vec<String>) {
+    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
+      vec![Node::get_logical_and_asm, Node::get_binary_op_asm];
+    self.get_generic_asm(
+      out_vec,
+      vec![NodeType::AndExpression, NodeType::BinaryOp],
+      fns,
+    );
+    // for child in self.children.iter() {
+    //   let f = match child.get_type() {
+    //     NodeType::BinaryOp => Node::get_binary_op_asm,
+    //     NodeType::UnaryOp => Node::get_unary_op_asm,
+    //     NodeType::Term => Node::get_term_asm,
+    //     _ => panic!(
+    //       "Invalid child type in {}: {}",
+    //       self.get_type().as_str(),
+    //       child.get_type().as_str()
+    //     ),
+    //   };
+    //   f(child, out_vec);
+    // }
+  }
+
+  fn get_logical_and_asm(&self, out_vec: &mut Vec<String>) {
+    // stub
+  }
+
+  fn get_term_asm(&self, out_vec: &mut Vec<String>) {
     for child in self.children.iter() {
       let f = match child.get_type() {
         NodeType::BinaryOp => Node::get_binary_op_asm,
         NodeType::Factor => Node::get_factor_asm,
         _ => panic!("Invalid child type in Term: {}", child.get_type().as_str()),
       };
-      out_string.push_str(&f(child));
+      f(child, out_vec);
     }
-    out_string
   }
 
-  fn get_binary_op_asm(&self) -> String {
-    let mut out_string = String::new();
-    let mut result: Vec<String> = vec![];
+  fn get_binary_op_asm(&self, out_vec: &mut Vec<String>) {
     for child in self.children.iter() {
       let f = match child.get_type() {
         NodeType::Term => Node::get_term_asm,
@@ -460,46 +485,41 @@ impl Node<String> {
           child.get_type().as_str()
         ),
       };
-      result.push(f(child));
+      f(child, out_vec);
     }
     match self.data.get(0).unwrap().as_str() {
       "+" => {
-        out_string.push_str(&self.create_arith_string(result));
-        out_string.push_str("\taddl\t%ecx, %eax\n");
+        self.add_arith_stack_asm(out_vec);
+        out_vec.push(format!("\taddl\t%ecx, %eax"));
       }
       "*" => {
-        out_string.push_str(&self.create_arith_string(result));
-        out_string.push_str("\timul\t%ecx, %eax\n");
+        self.add_arith_stack_asm(out_vec);
+        out_vec.push(format!("\timul\t%ecx, %eax"));
       }
       "-" => {
-        out_string.push_str(&self.create_arith_string(result));
-        out_string.push_str("\tsubl\t%eax, %ecx\n");
-        out_string.push_str("\tmovl\t%ecx, %eax\n");
+        self.add_arith_stack_asm(out_vec);
+        out_vec.push(format!("\tsubl\t%eax, %ecx"));
+        out_vec.push(format!("\tmovl\t%ecx, %eax"));
       }
       "/" => {
-        out_string.push_str(result.get(0).unwrap());
-        let strang = result.get(1).unwrap();
-        let strang = &strang.replace("eax", "ecx");
-        out_string.push_str(&strang);
-        out_string.push_str("\tcdq\n");
-        out_string.push_str("\tidivl\t%ecx\n");
+        let last_arith_ele = out_vec.remove(out_vec.len() - 1);
+        let modified_arith_ele = &last_arith_ele.replace("eax", "ecx");
+        out_vec.push(modified_arith_ele.to_owned());
+        out_vec.push(format!("\tcdq"));
+        out_vec.push(format!("\tidivl\t%ecx"));
       }
       _ => panic!("hurp"),
     }
-    out_string
   }
 
-  fn create_arith_string(&self, result: Vec<String>) -> String {
-    let mut out_string = String::new();
-    out_string.push_str(result.get(0).unwrap());
-    out_string.push_str("\tpush\t%eax\n");
-    out_string.push_str(result.get(1).unwrap());
-    out_string.push_str("\tpop\t%ecx\n");
-    out_string
+  fn add_arith_stack_asm(&self, out_vec: &mut Vec<String>) {
+    // add to the second to last element, so a mov then a stack push
+    // realy hoping this works lol
+    out_vec.insert(out_vec.len() - 2, format!("\tpush\t%eax"));
+    out_vec.push(format!("\tpop\t%ecx"));
   }
 
-  fn get_factor_asm(&self) -> String {
-    let mut out_string = String::new();
+  fn get_factor_asm(&self, out_vec: &mut Vec<String>) {
     for child in self.children.iter() {
       let f = match child.get_type() {
         NodeType::Expression => Node::get_expression_asm,
@@ -510,31 +530,31 @@ impl Node<String> {
           child.get_type().as_str()
         ),
       };
-      out_string.push_str(&f(child));
+      f(child, out_vec);
     }
-    out_string
   }
 
-  fn get_unary_op_asm(&self) -> String {
-    let mut out_string = String::new();
+  fn get_unary_op_asm(&self, out_vec: &mut Vec<String>) {
     for child in self.children.iter() {
-      out_string.push_str(&child.get_factor_asm());
+      child.get_factor_asm(out_vec);
     }
     match self.data.get(0).expect("Unary op has no op").as_str() {
-      "~" => out_string.push_str("\tnot\t%eax\n"),
-      "-" => out_string.push_str("\tneg\t%eax\n"),
+      "~" => out_vec.push(format!("\tnot\t%eax")),
+      "-" => out_vec.push(format!("\tneg\t%eax")),
       "!" => {
-        out_string.push_str("\tcmpl\t$0, %eax\n");
-        out_string.push_str("\tmovl\t$0, %eax\n");
-        out_string.push_str("\tsete\t%al\n");
+        out_vec.push(format!("\tcmpl\t$0, %eax"));
+        out_vec.push(format!("\tmovl\t$0, %eax"));
+        out_vec.push(format!("\tsete\t%al"));
       }
-      _ => panic!("hard corps"),
+      _ => panic!(
+        "Invalid char passed to unary op: {}",
+        self.data.get(0).unwrap()
+      ),
     }
-    out_string
   }
 
-  fn get_integer_asm(&self) -> String {
-    format!("\tmovl\t${}, %eax\n", self.data.join(""))
+  fn get_integer_asm(&self, out_vec: &mut Vec<String>) {
+    out_vec.push(format!("\tmovl\t${}, %eax", self.data.join("")));
   }
 }
 
