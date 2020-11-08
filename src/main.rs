@@ -38,6 +38,8 @@ fn main() {
       .output()
       .expect("Failed to delete file");
     debug!("delete: {}", delete_result.status);
+  } else {
+    panic!("GCC failed to compile");
   }
   let run_output = Command::new("./out")
     .output()

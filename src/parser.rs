@@ -549,6 +549,38 @@ impl Node<String> {
         out_vec.push(format!("\tsetne\t%al"));
         out_vec.push(format!("{}:", label2));
       }
+      "%" => {
+        let last_arith_ele = out_vec.remove(out_vec.len() - 1);
+        let modified_arith_ele = &last_arith_ele.replace("eax", "ecx");
+        out_vec.push(modified_arith_ele.to_owned());
+        out_vec.push(format!("\tcdq"));
+        out_vec.push(format!("\tidivl\t%ecx"));
+        out_vec.push(format!("\tmovl\t%edx, %eax"));
+      }
+      "&" => {
+        self.add_arith_stack_asm(out_vec);
+        out_vec.push(format!("\tand\t%ecx, %eax"));
+      }
+      "|" => {
+        self.add_arith_stack_asm(out_vec);
+        out_vec.push(format!("\tor\t%ecx, %eax"));
+      }
+      "^" => {
+        self.add_arith_stack_asm(out_vec);
+        out_vec.push(format!("\txor\t%ecx, %eax"));
+      }
+      "<<" => {
+        out_vec.insert(out_vec.len() - 1, format!("\tpush\t%eax"));
+        out_vec.push(format!("\tmovl\t%eax, %ecx"));
+        out_vec.push(format!("\tpop\t%eax"));
+        out_vec.push(format!("\tsall\t%cl, %eax"));
+      }
+      ">>" => {
+        out_vec.insert(out_vec.len() - 1, format!("\tpush\t%eax"));
+        out_vec.push(format!("\tmovl\t%eax, %ecx"));
+        out_vec.push(format!("\tpop\t%eax"));
+        out_vec.push(format!("\tsarl\t%cl, %eax"));
+      }
       _ => panic!("Couldn't find assembly for op: {}", self.data[0]),
     }
   }
