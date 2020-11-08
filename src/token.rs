@@ -71,6 +71,12 @@ pub enum TokenType {
   GreaterThan,
   LessThanOrEqual,
   GreaterThanOrEqual,
+  Modulo,
+  BitwiseAnd,
+  BitwiseOr,
+  BitwiseXor,
+  BitwiseShl,
+  BitwiseShr,
 }
 
 impl TokenType {
@@ -99,6 +105,12 @@ impl TokenType {
       TokenType::LessThanOrEqual => "<=",
       TokenType::GreaterThan => ">",
       TokenType::GreaterThanOrEqual => ">=",
+      TokenType::Modulo => "%",
+      TokenType::BitwiseAnd => "&",
+      TokenType::BitwiseOr => "|",
+      TokenType::BitwiseXor => "^",
+      TokenType::BitwiseShl => "<<",
+      TokenType::BitwiseShr => ">>",
     })
   }
 }

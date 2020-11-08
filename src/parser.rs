@@ -97,7 +97,10 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
   n.add_child(expression);
   let token = tokens.remove(0);
   if token.get_type() != &TokenType::Semicolon {
-    panic!("Statement is not closed by a semicolon");
+    panic!(
+      "Last value I know in a statement is a {:?}, not a semicolon",
+      token.get_type()
+    );
   }
   n.add_data(String::from(";"));
   n
@@ -107,7 +110,7 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
 fn parse_expression(tokens: &mut Vec<Token>) -> Node<String> {
   parse_exp(
     tokens,
-    NodeType::Expression,
+    NodeType::OrExpression,
     vec![TokenType::Or],
     parse_logical_and_exp,
   )
@@ -119,6 +122,33 @@ fn parse_logical_and_exp(tokens: &mut Vec<Token>) -> Node<String> {
     tokens,
     NodeType::AndExpression,
     vec![TokenType::And],
+    parse_bitwise_or_exp,
+  )
+}
+
+fn parse_bitwise_or_exp(tokens: &mut Vec<Token>) -> Node<String> {
+  parse_exp(
+    tokens,
+    NodeType::BitwiseOrExpression,
+    vec![TokenType::BitwiseOr],
+    parse_bitwise_xor_exp,
+  )
+}
+
+fn parse_bitwise_xor_exp(tokens: &mut Vec<Token>) -> Node<String> {
+  parse_exp(
+    tokens,
+    NodeType::BitwiseXorExpression,
+    vec![TokenType::BitwiseXor],
+    parse_bitwise_and_exp,
+  )
+}
+
+fn parse_bitwise_and_exp(tokens: &mut Vec<Token>) -> Node<String> {
+  parse_exp(
+    tokens,
+    NodeType::BitwiseAndExpression,
+    vec![TokenType::BitwiseAnd],
     parse_equality_exp,
   )
 }
@@ -144,6 +174,15 @@ fn parse_relational_exp(tokens: &mut Vec<Token>) -> Node<String> {
       TokenType::LessThan,
       TokenType::LessThanOrEqual,
     ],
+    parse_shift_exp,
+  )
+}
+
+fn parse_shift_exp(tokens: &mut Vec<Token>) -> Node<String> {
+  parse_exp(
+    tokens,
+    NodeType::ShiftExpression,
+    vec![TokenType::BitwiseShl, TokenType::BitwiseShr],
     parse_additive_exp,
   )
 }
@@ -163,7 +202,11 @@ fn parse_term(tokens: &mut Vec<Token>) -> Node<String> {
   parse_exp(
     tokens,
     NodeType::Term,
-    vec![TokenType::Multiplication, TokenType::Division],
+    vec![
+      TokenType::Multiplication,
+      TokenType::Division,
+      TokenType::Modulo,
+    ],
     parse_factor,
   )
 }
@@ -275,34 +318,17 @@ impl Node<String> {
   fn add_statement_log(&self) -> String {
     let mut out_vec = vec![self.data[0].to_ascii_uppercase().to_owned()];
     for child in self.children.iter() {
-      &child.add_expression_log(&mut out_vec);
+      &child.add_logical_or_log(&mut out_vec);
     }
     format!("\t\t{} {}\n", out_vec.join(""), self.data[1])
   }
 
-  fn add_generic_log<F: Fn(&Node<String>, &mut Vec<String>)>(
-    &self,
-    out_vec: &mut Vec<String>,
-    n_types: Vec<NodeType>,
-    fs: Vec<F>,
-  ) {
+  fn add_generic_log(&self, out_vec: &mut Vec<String>) {
     let mut original_len = out_vec.len();
     for child in self.children.iter() {
       original_len = out_vec.len();
-      let position = n_types.iter().position(|n| n == child.get_type());
-      match position {
-        Some(pos) => {
-          let f = fs
-            .get(pos)
-            .expect("Unequal count of node types and functions");
-          f(child, out_vec);
-        }
-        None => panic!(
-          "Invalid child type in {}: {}",
-          self.get_type().as_str(),
-          child.get_type().as_str()
-        ),
-      }
+      let f = self.get_function_for_node_type(child.get_type(), false);
+      f(child, out_vec);
     }
     if self.get_type() == &NodeType::BinaryOp && self.data.len() > 0 {
       out_vec.insert(
@@ -312,100 +338,58 @@ impl Node<String> {
     }
   }
 
-  fn add_expression_log(&self, out_vec: &mut Vec<String>) {
+  fn add_logical_or_log(&self, out_vec: &mut Vec<String>) {
     if self.data.len() > 0 {
       out_vec.push(self.data.get(0).unwrap().to_owned());
     }
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
-      vec![Node::add_logical_and_log, Node::add_binary_op_log];
-    self.add_generic_log(
-      out_vec,
-      vec![NodeType::AndExpression, NodeType::BinaryOp],
-      fns,
-    );
+    self.add_generic_log(out_vec);
     if self.data.len() > 0 {
       out_vec.push(self.data.last().unwrap().to_owned());
     }
   }
 
   fn add_logical_and_log(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
-      vec![Node::add_equality_log, Node::add_binary_op_log];
-    self.add_generic_log(
-      out_vec,
-      vec![NodeType::EqualityExpression, NodeType::BinaryOp],
-      fns,
-    );
+    self.add_generic_log(out_vec);
+  }
+
+  fn add_bitwise_or_log(&self, out_vec: &mut Vec<String>) {
+    self.add_generic_log(out_vec);
+  }
+
+  fn add_bitwise_xor_log(&self, out_vec: &mut Vec<String>) {
+    self.add_generic_log(out_vec);
+  }
+
+  fn add_bitwise_and_log(&self, out_vec: &mut Vec<String>) {
+    self.add_generic_log(out_vec);
   }
 
   fn add_equality_log(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
-      vec![Node::add_relational_log, Node::add_binary_op_log];
-    self.add_generic_log(
-      out_vec,
-      vec![NodeType::RelationalExpression, NodeType::BinaryOp],
-      fns,
-    );
+    self.add_generic_log(out_vec);
   }
 
   fn add_relational_log(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
-      vec![Node::add_additive_log, Node::add_binary_op_log];
-    self.add_generic_log(
-      out_vec,
-      vec![NodeType::AdditiveExpression, NodeType::BinaryOp],
-      fns,
-    );
+    self.add_generic_log(out_vec);
+  }
+
+  fn add_shift_log(&self, out_vec: &mut Vec<String>) {
+    self.add_generic_log(out_vec);
   }
 
   fn add_additive_log(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
-      vec![Node::add_term_log, Node::add_binary_op_log];
-    self.add_generic_log(out_vec, vec![NodeType::Term, NodeType::BinaryOp], fns);
+    self.add_generic_log(out_vec);
   }
 
   fn add_term_log(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
-      vec![Node::add_binary_op_log, Node::add_factor_log];
-    self.add_generic_log(out_vec, vec![NodeType::BinaryOp, NodeType::Factor], fns);
+    self.add_generic_log(out_vec);
   }
 
   fn add_factor_log(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> = vec![
-      Node::add_expression_log,
-      Node::add_unary_op_log,
-      Node::add_integer_log,
-    ];
-    self.add_generic_log(
-      out_vec,
-      vec![NodeType::Expression, NodeType::UnaryOp, NodeType::Integer],
-      fns,
-    );
+    self.add_generic_log(out_vec);
   }
 
   fn add_binary_op_log(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> = vec![
-      Node::add_term_log,
-      Node::add_factor_log,
-      Node::add_binary_op_log,
-      Node::add_equality_log,
-      Node::add_relational_log,
-      Node::add_additive_log,
-      Node::add_logical_and_log,
-    ];
-    self.add_generic_log(
-      out_vec,
-      vec![
-        NodeType::Term,
-        NodeType::Factor,
-        NodeType::BinaryOp,
-        NodeType::EqualityExpression,
-        NodeType::RelationalExpression,
-        NodeType::AdditiveExpression,
-        NodeType::AndExpression,
-      ],
-      fns,
-    )
+    self.add_generic_log(out_vec)
   }
 
   fn add_unary_op_log(&self, out_vec: &mut Vec<String>) {
@@ -432,109 +416,60 @@ impl Node<String> {
 
   fn get_statement_asm(&self, out_vec: &mut Vec<String>) {
     for child in self.children.iter() {
-      child.get_expression_asm(out_vec);
+      child.get_logical_or_asm(out_vec);
     }
     out_vec.push(format!("\tret"));
   }
 
-  fn get_generic_asm<F: Fn(&Node<String>, &mut Vec<String>)>(
-    &self,
-    out_vec: &mut Vec<String>,
-    n_types: Vec<NodeType>,
-    fs: Vec<F>,
-  ) {
+  fn get_generic_asm(&self, out_vec: &mut Vec<String>) {
     for child in self.children.iter() {
-      let position = n_types.iter().position(|n| n == child.get_type());
-      if let Some(pos) = position {
-        let f = fs
-          .get(pos)
-          .expect("Unequal count of node types and functions");
-        f(child, out_vec);
-      } else {
-        panic!(
-          "Invalid child type in {}: {}",
-          self.get_type().as_str(),
-          child.get_type().as_str()
-        );
-      }
+      let f = self.get_function_for_node_type(child.get_type(), true);
+      f(child, out_vec);
     }
   }
 
-  fn get_expression_asm(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
-      vec![Node::get_logical_and_asm, Node::get_binary_op_asm];
-    self.get_generic_asm(
-      out_vec,
-      vec![NodeType::AndExpression, NodeType::BinaryOp],
-      fns,
-    );
+  fn get_logical_or_asm(&self, out_vec: &mut Vec<String>) {
+    self.get_generic_asm(out_vec);
   }
 
   fn get_logical_and_asm(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
-      vec![Node::get_equality_asm, Node::get_binary_op_asm];
-    self.get_generic_asm(
-      out_vec,
-      vec![NodeType::EqualityExpression, NodeType::BinaryOp],
-      fns,
-    );
+    self.get_generic_asm(out_vec);
+  }
+
+  fn get_bitwise_or_asm(&self, out_vec: &mut Vec<String>) {
+    self.get_generic_asm(out_vec);
+  }
+
+  fn get_bitwise_xor_asm(&self, out_vec: &mut Vec<String>) {
+    self.get_generic_asm(out_vec);
+  }
+
+  fn get_bitwise_and_asm(&self, out_vec: &mut Vec<String>) {
+    self.get_generic_asm(out_vec);
   }
 
   fn get_equality_asm(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
-      vec![Node::get_relational_asm, Node::get_binary_op_asm];
-    self.get_generic_asm(
-      out_vec,
-      vec![NodeType::RelationalExpression, NodeType::BinaryOp],
-      fns,
-    );
+    self.get_generic_asm(out_vec);
   }
 
   fn get_relational_asm(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
-      vec![Node::get_additive_asm, Node::get_binary_op_asm];
-    self.get_generic_asm(
-      out_vec,
-      vec![NodeType::AdditiveExpression, NodeType::BinaryOp],
-      fns,
-    );
+    self.get_generic_asm(out_vec);
+  }
+
+  fn get_shift_asm(&self, out_vec: &mut Vec<String>) {
+    self.get_generic_asm(out_vec);
   }
 
   fn get_additive_asm(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
-      vec![Node::get_term_asm, Node::get_binary_op_asm];
-    self.get_generic_asm(out_vec, vec![NodeType::Term, NodeType::BinaryOp], fns);
+    self.get_generic_asm(out_vec);
   }
 
   fn get_term_asm(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> =
-      vec![Node::get_factor_asm, Node::get_binary_op_asm];
-    self.get_generic_asm(out_vec, vec![NodeType::Factor, NodeType::BinaryOp], fns);
+    self.get_generic_asm(out_vec);
   }
 
   fn get_binary_op_asm(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> = vec![
-      Node::get_term_asm,
-      Node::get_factor_asm,
-      Node::get_binary_op_asm,
-      Node::get_equality_asm,
-      Node::get_relational_asm,
-      Node::get_additive_asm,
-      Node::get_logical_and_asm,
-    ];
-    self.get_generic_asm(
-      out_vec,
-      vec![
-        NodeType::Term,
-        NodeType::Factor,
-        NodeType::BinaryOp,
-        NodeType::EqualityExpression,
-        NodeType::RelationalExpression,
-        NodeType::AdditiveExpression,
-        NodeType::AndExpression,
-      ],
-      fns,
-    );
+    self.get_generic_asm(out_vec);
     let mut handle_comparison = || {
       self.add_arith_stack_asm(out_vec);
       out_vec.push(format!("\tcmpl\t%eax, %ecx"));
@@ -624,16 +559,7 @@ impl Node<String> {
   }
 
   fn get_factor_asm(&self, out_vec: &mut Vec<String>) {
-    let fns: Vec<fn(&Node<String>, &mut Vec<String>)> = vec![
-      Node::get_expression_asm,
-      Node::get_unary_op_asm,
-      Node::get_integer_asm,
-    ];
-    self.get_generic_asm(
-      out_vec,
-      vec![NodeType::Expression, NodeType::UnaryOp, NodeType::Integer],
-      fns,
-    );
+    self.get_generic_asm(out_vec);
   }
 
   fn get_unary_op_asm(&self, out_vec: &mut Vec<String>) {
@@ -658,6 +584,72 @@ impl Node<String> {
   fn get_integer_asm(&self, out_vec: &mut Vec<String>) {
     out_vec.push(format!("\tmovl\t${}, %eax", self.data.join("")));
   }
+
+  fn get_function_for_node_type(
+    &self,
+    nt: &NodeType,
+    is_asm: bool,
+  ) -> fn(&Node<String>, &mut Vec<String>) {
+    match nt {
+      NodeType::OrExpression => match is_asm {
+        true => Node::get_logical_or_asm,
+        false => Node::add_logical_or_log,
+      },
+      NodeType::AndExpression => match is_asm {
+        true => Node::get_logical_and_asm,
+        false => Node::add_logical_and_log,
+      },
+      NodeType::BitwiseOrExpression => match is_asm {
+        true => Node::get_bitwise_or_asm,
+        false => Node::add_bitwise_or_log,
+      },
+      NodeType::BitwiseXorExpression => match is_asm {
+        true => Node::get_bitwise_xor_asm,
+        false => Node::add_bitwise_xor_log,
+      },
+      NodeType::BitwiseAndExpression => match is_asm {
+        true => Node::get_bitwise_and_asm,
+        false => Node::add_bitwise_and_log,
+      },
+      NodeType::EqualityExpression => match is_asm {
+        true => Node::get_equality_asm,
+        false => Node::add_equality_log,
+      },
+      NodeType::RelationalExpression => match is_asm {
+        true => Node::get_relational_asm,
+        false => Node::add_relational_log,
+      },
+      NodeType::ShiftExpression => match is_asm {
+        true => Node::get_shift_asm,
+        false => Node::add_shift_log,
+      },
+      NodeType::AdditiveExpression => match is_asm {
+        true => Node::get_additive_asm,
+        false => Node::add_additive_log,
+      },
+      NodeType::Term => match is_asm {
+        true => Node::get_term_asm,
+        false => Node::add_term_log,
+      },
+      NodeType::Factor => match is_asm {
+        true => Node::get_factor_asm,
+        false => Node::add_factor_log,
+      },
+      NodeType::Integer => match is_asm {
+        true => Node::get_integer_asm,
+        false => Node::add_integer_log,
+      },
+      NodeType::UnaryOp => match is_asm {
+        true => Node::get_unary_op_asm,
+        false => Node::add_unary_op_log,
+      },
+      NodeType::BinaryOp => match is_asm {
+        true => Node::get_binary_op_asm,
+        false => Node::add_binary_op_log,
+      },
+      _ => panic!("Type {} doesn't have two associated functions"),
+    }
+  }
 }
 
 #[derive(Debug, Serialize, Eq, PartialEq)]
@@ -665,36 +657,20 @@ pub enum NodeType {
   Program,
   Function,
   Statement,
-  Expression,
+  OrExpression,
   AndExpression,
+  BitwiseOrExpression,
+  BitwiseXorExpression,
+  BitwiseAndExpression,
   EqualityExpression,
   RelationalExpression,
+  ShiftExpression,
   AdditiveExpression,
   Term,
   Factor,
   Integer,
   UnaryOp,
   BinaryOp,
-}
-
-impl NodeType {
-  fn as_str(&self) -> &str {
-    match self {
-      NodeType::Program => "Program",
-      NodeType::Function => "Function",
-      NodeType::Statement => "Statement",
-      NodeType::Expression => "Expression",
-      NodeType::Term => "Term",
-      NodeType::Factor => "Factor",
-      NodeType::Integer => "Integer",
-      NodeType::UnaryOp => "UnaryOp",
-      NodeType::BinaryOp => "BinaryOp",
-      NodeType::AndExpression => "AndExpression",
-      NodeType::EqualityExpression => "EqualityExpression",
-      NodeType::RelationalExpression => "RelationalExpression",
-      NodeType::AdditiveExpression => "AdditiveExpression",
-    }
-  }
 }
 
 impl Display for Node<String> {

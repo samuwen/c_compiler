@@ -23,10 +23,16 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "\\|\\|", TokenType::Or));
   total.append(&mut find_tokens(&f, "==", TokenType::Equal));
   total.append(&mut find_tokens(&f, "!=", TokenType::NotEqual));
-  total.append(&mut find_tokens(&f, "<", TokenType::LessThan));
+  total.append(&mut find_tokens(&f, "\\s<\\s", TokenType::LessThan));
   total.append(&mut find_tokens(&f, "<>=", TokenType::LessThanOrEqual));
-  total.append(&mut find_tokens(&f, ">", TokenType::GreaterThan));
+  total.append(&mut find_tokens(&f, "\\s>\\s", TokenType::GreaterThan));
   total.append(&mut find_tokens(&f, ">=", TokenType::GreaterThanOrEqual));
+  total.append(&mut find_tokens(&f, "%", TokenType::Modulo));
+  total.append(&mut find_tokens(&f, "&", TokenType::BitwiseAnd));
+  total.append(&mut find_tokens(&f, "\\|", TokenType::BitwiseOr));
+  total.append(&mut find_tokens(&f, "\\^", TokenType::BitwiseXor));
+  total.append(&mut find_tokens(&f, "<<", TokenType::BitwiseShl));
+  total.append(&mut find_tokens(&f, ">>", TokenType::BitwiseShr));
   total.sort();
   total.dedup();
   trace!("{:?}", total);
@@ -40,6 +46,6 @@ fn find_tokens(f: &String, value: &str, token_type: TokenType) -> Vec<Token> {
 
 fn gen_tokens(matches: Matches, token_type: &TokenType) -> Vec<Token> {
   matches
-    .map(|m| Token::new(m.as_str(), token_type, m.start() as isize))
+    .map(|m| Token::new(m.as_str().trim(), token_type, m.start() as isize))
     .collect()
 }
