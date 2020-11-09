@@ -77,6 +77,7 @@ pub enum TokenType {
   BitwiseXor,
   BitwiseShl,
   BitwiseShr,
+  Assignment,
 }
 
 impl TokenType {
@@ -111,6 +112,7 @@ impl TokenType {
       TokenType::BitwiseXor => "^",
       TokenType::BitwiseShl => "<<",
       TokenType::BitwiseShr => ">>",
+      TokenType::Assignment => "=",
     })
   }
 }

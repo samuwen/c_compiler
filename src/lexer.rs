@@ -33,8 +33,10 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "\\^", TokenType::BitwiseXor));
   total.append(&mut find_tokens(&f, "<<", TokenType::BitwiseShl));
   total.append(&mut find_tokens(&f, ">>", TokenType::BitwiseShr));
+  total.append(&mut find_tokens(&f, "\\s=\\s", TokenType::Assignment));
   total.sort();
   total.dedup();
+  total = remove_extra_logical_negation_tokens(total);
   debug!("{:?}", total);
   total
 }
@@ -48,4 +50,26 @@ fn gen_tokens(matches: Matches, token_type: &TokenType) -> Vec<Token> {
   matches
     .map(|m| Token::new(m.as_str().trim(), token_type, m.start() as isize))
     .collect()
+}
+
+// gross hack because regex library does not support lookahead
+fn remove_extra_logical_negation_tokens(mut total: Vec<Token>) -> Vec<Token> {
+  let ne_count = total
+    .iter()
+    .filter(|tok| tok.get_type() == &TokenType::NotEqual)
+    .count();
+  for _ in 0..ne_count {
+    let pos = total
+      .iter()
+      .position(|tok| tok.get_type() == &TokenType::NotEqual)
+      .unwrap();
+    let removed = total.remove(pos + 1);
+    if removed.get_type() != &TokenType::LogicalNegation {
+      panic!(
+        "Removed incorrect token after NotEqual expression: {}",
+        removed.get_type()
+      );
+    }
+  }
+  total
 }

@@ -338,7 +338,7 @@ impl Node<String> {
     }
   }
 
-  fn add_logical_or_log(&self, out_vec: &mut Vec<String>) {
+  fn add_logical_or_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     if self.data.len() > 0 {
       out_vec.push(self.data.get(0).unwrap().to_owned());
     }
@@ -346,61 +346,75 @@ impl Node<String> {
     if self.data.len() > 0 {
       out_vec.push(self.data.last().unwrap().to_owned());
     }
+    self.data.clone()
   }
 
-  fn add_logical_and_log(&self, out_vec: &mut Vec<String>) {
+  fn add_logical_and_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     self.add_generic_log(out_vec);
+    self.data.clone()
   }
 
-  fn add_bitwise_or_log(&self, out_vec: &mut Vec<String>) {
+  fn add_bitwise_or_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     self.add_generic_log(out_vec);
+    self.data.clone()
   }
 
-  fn add_bitwise_xor_log(&self, out_vec: &mut Vec<String>) {
+  fn add_bitwise_xor_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     self.add_generic_log(out_vec);
+    self.data.clone()
   }
 
-  fn add_bitwise_and_log(&self, out_vec: &mut Vec<String>) {
+  fn add_bitwise_and_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     self.add_generic_log(out_vec);
+    self.data.clone()
   }
 
-  fn add_equality_log(&self, out_vec: &mut Vec<String>) {
+  fn add_equality_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     self.add_generic_log(out_vec);
+    self.data.clone()
   }
 
-  fn add_relational_log(&self, out_vec: &mut Vec<String>) {
+  fn add_relational_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     self.add_generic_log(out_vec);
+    self.data.clone()
   }
 
-  fn add_shift_log(&self, out_vec: &mut Vec<String>) {
+  fn add_shift_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     self.add_generic_log(out_vec);
+    self.data.clone()
   }
 
-  fn add_additive_log(&self, out_vec: &mut Vec<String>) {
+  fn add_additive_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     self.add_generic_log(out_vec);
+    self.data.clone()
   }
 
-  fn add_term_log(&self, out_vec: &mut Vec<String>) {
+  fn add_term_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     self.add_generic_log(out_vec);
+    self.data.clone()
   }
 
-  fn add_factor_log(&self, out_vec: &mut Vec<String>) {
+  fn add_factor_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     self.add_generic_log(out_vec);
+    self.data.clone()
   }
 
-  fn add_binary_op_log(&self, out_vec: &mut Vec<String>) {
-    self.add_generic_log(out_vec)
+  fn add_binary_op_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    self.add_generic_log(out_vec);
+    self.data.clone()
   }
 
-  fn add_unary_op_log(&self, out_vec: &mut Vec<String>) {
+  fn add_unary_op_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     out_vec.push(self.data.get(0).expect("Unary op has no op").to_owned());
     for child in self.children.iter() {
       child.add_factor_log(out_vec);
     }
+    self.data.clone()
   }
 
-  fn add_integer_log(&self, out_vec: &mut Vec<String>) {
-    out_vec.push(self.data.join(" "))
+  fn add_integer_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    out_vec.push(self.data.join(" "));
+    self.data.clone()
   }
 
   // ===================== Assembly builder statements ====================
@@ -415,84 +429,97 @@ impl Node<String> {
   }
 
   fn get_statement_asm(&self, out_vec: &mut Vec<String>) {
+    let mut data = vec![];
     for child in self.children.iter() {
-      child.get_logical_or_asm(out_vec);
+      let mut d = child.get_logical_or_asm(out_vec);
+      data.append(&mut d);
+    }
+    // if nothing else has been added, we know we just have a single number
+    if out_vec.len() == 2 {
+      self.load_eax_reg(out_vec, data.get(0).unwrap());
     }
     out_vec.push(format!("\tret"));
   }
 
-  fn get_generic_asm(&self, out_vec: &mut Vec<String>) {
+  fn get_generic_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    let mut data = vec![];
     for child in self.children.iter() {
       let f = self.get_function_for_node_type(child.get_type(), true);
-      f(child, out_vec);
+      let mut d = f(child, out_vec);
+      data.append(&mut d);
     }
+    data
   }
 
-  fn get_logical_or_asm(&self, out_vec: &mut Vec<String>) {
-    self.get_generic_asm(out_vec);
+  fn get_logical_or_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    self.get_generic_asm(out_vec)
   }
 
-  fn get_logical_and_asm(&self, out_vec: &mut Vec<String>) {
-    self.get_generic_asm(out_vec);
+  fn get_logical_and_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    self.get_generic_asm(out_vec)
   }
 
-  fn get_bitwise_or_asm(&self, out_vec: &mut Vec<String>) {
-    self.get_generic_asm(out_vec);
+  fn get_bitwise_or_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    self.get_generic_asm(out_vec)
   }
 
-  fn get_bitwise_xor_asm(&self, out_vec: &mut Vec<String>) {
-    self.get_generic_asm(out_vec);
+  fn get_bitwise_xor_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    self.get_generic_asm(out_vec)
   }
 
-  fn get_bitwise_and_asm(&self, out_vec: &mut Vec<String>) {
-    self.get_generic_asm(out_vec);
+  fn get_bitwise_and_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    self.get_generic_asm(out_vec)
   }
 
-  fn get_equality_asm(&self, out_vec: &mut Vec<String>) {
-    self.get_generic_asm(out_vec);
+  fn get_equality_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    self.get_generic_asm(out_vec)
   }
 
-  fn get_relational_asm(&self, out_vec: &mut Vec<String>) {
-    self.get_generic_asm(out_vec);
+  fn get_relational_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    self.get_generic_asm(out_vec)
   }
 
-  fn get_shift_asm(&self, out_vec: &mut Vec<String>) {
-    self.get_generic_asm(out_vec);
+  fn get_shift_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    self.get_generic_asm(out_vec)
   }
 
-  fn get_additive_asm(&self, out_vec: &mut Vec<String>) {
-    self.get_generic_asm(out_vec);
+  fn get_additive_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    self.get_generic_asm(out_vec)
   }
 
-  fn get_term_asm(&self, out_vec: &mut Vec<String>) {
-    self.get_generic_asm(out_vec);
+  fn get_term_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    self.get_generic_asm(out_vec)
   }
 
-  fn get_binary_op_asm(&self, out_vec: &mut Vec<String>) {
-    self.get_generic_asm(out_vec);
+  fn get_binary_op_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    let mut data = self.get_generic_asm(out_vec);
+    if data.len() != 2 {
+      panic!("Binary op data vec has {} elements", data.len());
+    }
+    let d2 = data.remove(1);
+    let d1 = data.get(0).unwrap();
     let mut handle_comparison = || {
-      self.add_arith_stack_asm(out_vec);
+      self.load_arithmetic_asm(out_vec, d1, &d2);
       out_vec.push(format!("\tcmpl\t%eax, %ecx"));
       out_vec.push(format!("\tmovl\t$0, %eax"));
     };
     match self.data.get(0).unwrap().as_str() {
       "+" => {
-        self.add_arith_stack_asm(out_vec);
+        self.load_arithmetic_asm(out_vec, d1, &d2);
         out_vec.push(format!("\taddl\t%ecx, %eax"));
       }
       "*" => {
-        self.add_arith_stack_asm(out_vec);
+        self.load_arithmetic_asm(out_vec, d1, &d2);
         out_vec.push(format!("\timul\t%ecx, %eax"));
       }
       "-" => {
-        self.add_arith_stack_asm(out_vec);
+        self.load_arithmetic_asm(out_vec, d1, &d2);
         out_vec.push(format!("\tsubl\t%eax, %ecx"));
         out_vec.push(format!("\tmovl\t%ecx, %eax"));
       }
       "/" => {
-        let last_arith_ele = out_vec.remove(out_vec.len() - 1);
-        let modified_arith_ele = &last_arith_ele.replace("eax", "ecx");
-        out_vec.push(modified_arith_ele.to_owned());
+        self.load_eax_reg(out_vec, &d1);
+        self.load_reg(out_vec, &d2, "ecx");
         out_vec.push(format!("\tcdq"));
         out_vec.push(format!("\tidivl\t%ecx"));
       }
@@ -523,99 +550,92 @@ impl Node<String> {
       "||" => {
         let label1 = get_next_label();
         let label2 = get_next_label();
-        let mut drained = self.get_last_move_eles(out_vec);
-        out_vec.push(drained.remove(drained.len() - 2).to_owned());
+        self.load_eax_reg(out_vec, d1);
         out_vec.push(format!("\tcmpl\t$0, %eax"));
         out_vec.push(format!("\tje\t{}", label1));
         out_vec.push(format!("\tmovl\t$1, %eax"));
         out_vec.push(format!("\tjmp\t{}", label2));
         out_vec.push(format!("{}:", label1));
-        out_vec.push(drained.get(drained.len() - 1).unwrap().to_owned());
+        self.load_eax_reg(out_vec, &d2);
         out_vec.push(format!("\tcmpl\t$0, %eax"));
         out_vec.push(format!("\tmovl\t$0, %eax"));
         out_vec.push(format!("\tsetne\t%al"));
         out_vec.push(format!("{}:", label2));
-        drained.iter().for_each(|ele| {
-          out_vec.push(ele.to_owned());
-        });
       }
       "&&" => {
         let label1 = get_next_label();
         let label2 = get_next_label();
-        let mut drained = self.get_last_move_eles(out_vec);
-        out_vec.push(drained.remove(drained.len() - 2).to_owned());
+        self.load_eax_reg(out_vec, d1);
         out_vec.push(format!("\tcmpl\t$0, %eax"));
         out_vec.push(format!("\tjne\t{}", label1));
         out_vec.push(format!("\tjmp\t{}", label2));
         out_vec.push(format!("{}:", label1));
-        out_vec.push(drained.get(drained.len() - 1).unwrap().to_owned());
+        self.load_eax_reg(out_vec, &d2);
         out_vec.push(format!("\tcmpl\t$0, %eax"));
         out_vec.push(format!("\tmovl\t$0, %eax"));
         out_vec.push(format!("\tsetne\t%al"));
         out_vec.push(format!("{}:", label2));
-        drained.iter().for_each(|ele| {
-          out_vec.push(ele.to_owned());
-        });
       }
       "%" => {
-        let last_arith_ele = out_vec.remove(out_vec.len() - 1);
-        let modified_arith_ele = &last_arith_ele.replace("eax", "ecx");
-        out_vec.push(modified_arith_ele.to_owned());
+        self.load_eax_reg(out_vec, &d1);
+        self.load_reg(out_vec, &d2, "ecx");
         out_vec.push(format!("\tcdq"));
         out_vec.push(format!("\tidivl\t%ecx"));
         out_vec.push(format!("\tmovl\t%edx, %eax"));
       }
       "&" => {
-        self.add_arith_stack_asm(out_vec);
+        self.load_arithmetic_asm(out_vec, d1, &d2);
         out_vec.push(format!("\tand\t%ecx, %eax"));
       }
       "|" => {
-        self.add_arith_stack_asm(out_vec);
+        self.load_arithmetic_asm(out_vec, d1, &d2);
         out_vec.push(format!("\tor\t%ecx, %eax"));
       }
       "^" => {
-        self.add_arith_stack_asm(out_vec);
+        self.load_arithmetic_asm(out_vec, d1, &d2);
         out_vec.push(format!("\txor\t%ecx, %eax"));
       }
       "<<" => {
-        out_vec.insert(out_vec.len() - 1, format!("\tpush\t%eax"));
-        out_vec.push(format!("\tmovl\t%eax, %ecx"));
-        out_vec.push(format!("\tpop\t%eax"));
+        self.load_reg(out_vec, &d2, "ecx");
+        self.load_eax_reg(out_vec, d1);
         out_vec.push(format!("\tsall\t%cl, %eax"));
       }
       ">>" => {
-        out_vec.insert(out_vec.len() - 1, format!("\tpush\t%eax"));
-        out_vec.push(format!("\tmovl\t%eax, %ecx"));
-        out_vec.push(format!("\tpop\t%eax"));
+        self.load_reg(out_vec, &d2, "ecx");
+        self.load_eax_reg(out_vec, d1);
         out_vec.push(format!("\tsarl\t%cl, %eax"));
       }
       _ => panic!("Couldn't find assembly for op: {}", self.data[0]),
     }
+    data
   }
 
-  fn get_last_move_eles(&self, out_vec: &mut Vec<String>) -> Vec<String> {
-    let last_mov_eles = out_vec
-      .iter()
-      .rev()
-      .take_while(|ele| ele.contains("\tmovl"))
-      .count();
-    let drained = out_vec.drain(out_vec.len() - last_mov_eles..out_vec.len());
-    drained.collect()
+  fn load_reg(&self, out_vec: &mut Vec<String>, num: &String, reg: &str) {
+    out_vec.push(format!("\tmovl\t${}, %{}", num, reg))
   }
 
-  fn add_arith_stack_asm(&self, out_vec: &mut Vec<String>) {
-    out_vec.insert(out_vec.len() - 1, format!("\tpush\t%eax"));
+  fn load_eax_reg(&self, out_vec: &mut Vec<String>, num: &String) {
+    self.load_reg(out_vec, num, "eax");
+  }
+
+  fn load_arithmetic_asm(&self, out_vec: &mut Vec<String>, d1: &String, d2: &String) {
+    self.load_eax_reg(out_vec, d1);
+    out_vec.push(format!("\tpush\t%eax"));
+    self.load_eax_reg(out_vec, d2);
     out_vec.push(format!("\tpop\t%ecx"));
   }
 
-  fn get_factor_asm(&self, out_vec: &mut Vec<String>) {
-    self.get_generic_asm(out_vec);
+  fn get_factor_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    self.get_generic_asm(out_vec)
   }
 
-  fn get_unary_op_asm(&self, out_vec: &mut Vec<String>) {
+  fn get_unary_op_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    let mut data = vec![];
     for child in self.children.iter() {
-      child.get_factor_asm(out_vec);
+      let mut result = child.get_factor_asm(out_vec);
+      data.append(&mut result);
     }
+    self.load_eax_reg(out_vec, data.get(0).unwrap());
     match self.data.get(0).expect("Unary op has no op").as_str() {
       "~" => out_vec.push(format!("\tnot\t%eax")),
       "-" => out_vec.push(format!("\tneg\t%eax")),
@@ -629,17 +649,18 @@ impl Node<String> {
         self.data.get(0).unwrap()
       ),
     }
+    data
   }
 
-  fn get_integer_asm(&self, out_vec: &mut Vec<String>) {
-    out_vec.push(format!("\tmovl\t${}, %eax", self.data.join("")));
+  fn get_integer_asm(&self, _: &mut Vec<String>) -> Vec<String> {
+    self.data.clone()
   }
 
   fn get_function_for_node_type(
     &self,
     nt: &NodeType,
     is_asm: bool,
-  ) -> fn(&Node<String>, &mut Vec<String>) {
+  ) -> fn(&Node<String>, &mut Vec<String>) -> Vec<String> {
     match nt {
       NodeType::OrExpression => match is_asm {
         true => Node::get_logical_or_asm,
@@ -704,7 +725,7 @@ impl Node<String> {
 
 #[derive(Debug, Serialize, Eq, PartialEq)]
 pub enum NodeType {
-  Program,
+  // Program,
   Function,
   Statement,
   OrExpression,
