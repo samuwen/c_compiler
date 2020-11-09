@@ -263,7 +263,7 @@ fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
       op_node.add_child(factor);
       n.add_child(op_node);
     }
-    _ => panic!("the disco"),
+    _ => panic!("Unexpected child in factor: {:?}", token.get_type()),
   }
   n
 }
@@ -523,31 +523,39 @@ impl Node<String> {
       "||" => {
         let label1 = get_next_label();
         let label2 = get_next_label();
-        let last_arith_ele = out_vec.remove(out_vec.len() - 1);
+        let mut drained = self.get_last_move_eles(out_vec);
+        out_vec.push(drained.remove(drained.len() - 2).to_owned());
         out_vec.push(format!("\tcmpl\t$0, %eax"));
         out_vec.push(format!("\tje\t{}", label1));
         out_vec.push(format!("\tmovl\t$1, %eax"));
         out_vec.push(format!("\tjmp\t{}", label2));
         out_vec.push(format!("{}:", label1));
-        out_vec.push(last_arith_ele.to_owned());
+        out_vec.push(drained.get(drained.len() - 1).unwrap().to_owned());
         out_vec.push(format!("\tcmpl\t$0, %eax"));
         out_vec.push(format!("\tmovl\t$0, %eax"));
         out_vec.push(format!("\tsetne\t%al"));
         out_vec.push(format!("{}:", label2));
+        drained.iter().for_each(|ele| {
+          out_vec.push(ele.to_owned());
+        });
       }
       "&&" => {
         let label1 = get_next_label();
         let label2 = get_next_label();
-        let last_arith_ele = out_vec.remove(out_vec.len() - 1);
+        let mut drained = self.get_last_move_eles(out_vec);
+        out_vec.push(drained.remove(drained.len() - 2).to_owned());
         out_vec.push(format!("\tcmpl\t$0, %eax"));
         out_vec.push(format!("\tjne\t{}", label1));
         out_vec.push(format!("\tjmp\t{}", label2));
         out_vec.push(format!("{}:", label1));
-        out_vec.push(last_arith_ele.to_owned());
+        out_vec.push(drained.get(drained.len() - 1).unwrap().to_owned());
         out_vec.push(format!("\tcmpl\t$0, %eax"));
         out_vec.push(format!("\tmovl\t$0, %eax"));
         out_vec.push(format!("\tsetne\t%al"));
         out_vec.push(format!("{}:", label2));
+        drained.iter().for_each(|ele| {
+          out_vec.push(ele.to_owned());
+        });
       }
       "%" => {
         let last_arith_ele = out_vec.remove(out_vec.len() - 1);
@@ -583,6 +591,16 @@ impl Node<String> {
       }
       _ => panic!("Couldn't find assembly for op: {}", self.data[0]),
     }
+  }
+
+  fn get_last_move_eles(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    let last_mov_eles = out_vec
+      .iter()
+      .rev()
+      .take_while(|ele| ele.contains("\tmovl"))
+      .count();
+    let drained = out_vec.drain(out_vec.len() - last_mov_eles..out_vec.len());
+    drained.collect()
   }
 
   fn add_arith_stack_asm(&self, out_vec: &mut Vec<String>) {
