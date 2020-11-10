@@ -59,24 +59,6 @@ impl<T> Node<T> {
 }
 
 impl Node<String> {
-  fn add_function_log(&self) -> String {
-    format!(
-      "FUN {} {}:\n\tparams: {}{}\n\tbody:\n",
-      self.data[DATA_TYPE_INDEX].to_ascii_uppercase(),
-      self.data[FUNCTION_NAME_INDEX],
-      self.data[OPAREN_INDEX],
-      self.data[CPAREN_INDEX]
-    )
-  }
-
-  fn add_statement_log(&self) -> String {
-    let mut out_vec = vec![self.data[0].to_ascii_uppercase().to_owned()];
-    for child in self.children.iter() {
-      &child.add_logical_or_log(&mut out_vec);
-    }
-    format!("\t\t{} {}\n", out_vec.join(""), self.data[1])
-  }
-
   fn add_generic_log(&self, out_vec: &mut Vec<String>) {
     let mut original_len = out_vec.len();
     for child in self.children.iter() {
@@ -90,6 +72,53 @@ impl Node<String> {
         self.data.get(0).expect("Binary op has no op").to_owned(),
       );
     }
+  }
+
+  fn add_function_log(&self, out_vec: &mut Vec<String>) {
+    let f_string = format!(
+      "FUN {} {}:\n\tparams: {}{}\n\tbody:",
+      self.data[DATA_TYPE_INDEX].to_ascii_uppercase(),
+      self.data[FUNCTION_NAME_INDEX],
+      self.data[OPAREN_INDEX],
+      self.data[CPAREN_INDEX]
+    );
+    out_vec.push(f_string);
+    for child in self.children.iter() {
+      child.add_statement_log(out_vec);
+    }
+  }
+
+  fn add_statement_log(&self, out_vec: &mut Vec<String>) {
+    for child in self.children.iter() {
+      let mut statement_vec = vec![];
+      match self.get_type() {
+        NodeType::AssignmentStatement => {
+          statement_vec.push(self.data.join(" "));
+          child.add_assignment_log(&mut statement_vec);
+        }
+        NodeType::ExpressionStatement => {
+          child.add_logical_or_log(&mut statement_vec);
+        }
+        NodeType::ReturnStatement => {
+          statement_vec.push(String::from("return "));
+          child.add_logical_or_log(&mut statement_vec);
+        }
+        _ => panic!("Invalid statement type: {:?}", self.get_type()),
+      };
+      let mut tabs = String::from("\t\t");
+      let mut statement_string = statement_vec.join(" ");
+      statement_string.push_str(";");
+      tabs.push_str(&statement_string);
+      out_vec.push(tabs);
+    }
+  }
+
+  fn add_assignment_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
+    out_vec.push(self.data.join("")); // type and identifier
+    for child in self.children.iter() {
+      child.add_logical_or_log(out_vec);
+    }
+    self.data.clone()
   }
 
   fn add_logical_or_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
@@ -192,7 +221,9 @@ impl Node<String> {
     if out_vec.len() == 2 {
       self.load_eax_reg(out_vec, data.get(0).unwrap());
     }
-    out_vec.push(format!("\tret"));
+    if self.get_type() == &NodeType::ReturnStatement {
+      out_vec.push(format!("\tret"));
+    }
   }
 
   fn get_generic_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
@@ -481,7 +512,10 @@ impl Node<String> {
 pub enum NodeType {
   // Program,
   Function,
-  Statement,
+  ReturnStatement,
+  ExpressionStatement,
+  AssignmentStatement,
+  AssignmentExpression,
   OrExpression,
   AndExpression,
   BitwiseOrExpression,
@@ -500,11 +534,8 @@ pub enum NodeType {
 
 impl Display for Node<String> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    let mut out_string = String::new();
-    out_string.push_str(&self.add_function_log());
-    for child in self.children.iter() {
-      out_string.push_str(&child.add_statement_log());
-    }
-    write!(f, "\n{}", out_string)
+    let mut out_vec = vec![];
+    self.add_function_log(&mut out_vec);
+    write!(f, "\n{}", out_vec.join("\n"))
   }
 }

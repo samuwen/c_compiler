@@ -29,13 +29,13 @@ impl Display for Prog {
 
 pub fn parse(mut tokens: Vec<Token>) -> Prog {
   let function = parse_function(&mut tokens);
-  let json = to_string(&function.get_children()[0].get_children()[0]).unwrap();
+  let json = to_string(&function).unwrap();
   std::fs::write("out.json", &json).expect("Failed to write");
   debug!("{}", function);
   Prog::new(function)
 }
 
-// <function> ::= "int" <id> "(" ")" "{" <statement> "}"
+// <function> ::= "int" <id> "(" ")" "{" { <statement> } "}"
 fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   let mut n = Node::new(NodeType::Function);
   let token = tokens.remove(0);
@@ -64,33 +64,101 @@ fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   if token.get_type() != &TokenType::OBrace {
     panic!("Function declaration not followed by brace");
   }
-  let statement = parse_statement(tokens);
+  let mut next = tokens.get(0).expect("Unexpected statement truncation");
+  while next.get_type() != &TokenType::CBrace {
+    let statement = parse_statement(tokens);
+    n.add_child(statement);
+    next = tokens.get(0).expect("Unexpected statement truncation");
+  }
   let token = tokens.remove(0);
   if token.get_type() != &TokenType::CBrace {
     panic!("Function declaration not closed by brace");
   }
-  n.add_child(statement);
   n
 }
 
-// <statement> ::= "return" <exp> ";"
+// <statement> ::= <return-statement> | <expression-statement> | <assignment-statement>
 fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::Statement);
-  let token = tokens.remove(0);
-  if token.get_type() != &TokenType::ReturnKeyword {
-    panic!("Statement does not have return keyword");
+  let token = tokens.get(0).unwrap();
+  match token.get_type() {
+    TokenType::ReturnKeyword => parse_return_statement(tokens),
+    TokenType::Integer => parse_expression_statement(tokens),
+    TokenType::IntKeyword => parse_assignment_statement(tokens),
+    _ => panic!("Unknown statement found: {:?}", token.get_type()),
   }
-  n.add_data(String::from("return "));
+}
+
+// <return-statement> ::= "return" <exp> ";"
+fn parse_return_statement(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::ReturnStatement);
+  tokens.remove(0);
   let expression = parse_expression(tokens);
   n.add_child(expression);
   let token = tokens.remove(0);
   if token.get_type() != &TokenType::Semicolon {
     panic!(
-      "Last value I know in a statement is a {:?}, not a semicolon",
+      "Last value I know in a return statement is a {:?}, not a semicolon",
       token.get_type()
     );
   }
-  n.add_data(String::from(";"));
+  n
+}
+
+// <exp> ";"
+fn parse_expression_statement(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::ExpressionStatement);
+  let expression = parse_expression(tokens);
+  n.add_child(expression);
+  let token = tokens.remove(0);
+  if token.get_type() != &TokenType::Semicolon {
+    panic!(
+      "Last value I know in an expression statement is a {:?}, not a semicolon",
+      token.get_type()
+    );
+  }
+  n
+}
+
+// "int" <id> [= <exp>] ";"
+fn parse_assignment_statement(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::AssignmentStatement);
+  let token = tokens.remove(0);
+  n.add_data(token.get_value());
+  let id_token = tokens.remove(0);
+  n.add_data(id_token.get_value());
+  let token = tokens
+    .get(0)
+    .expect("assignment ID is last token in statement");
+  match token.get_type() {
+    TokenType::Assignment => {
+      let expression = parse_assignment_expression(tokens);
+      n.add_child(expression);
+    }
+    TokenType::Semicolon => {
+      n.add_child(Node::new(NodeType::AssignmentExpression));
+    }
+    _ => panic!(
+      "Expected Assignment or Semicolon. Found: {:?}",
+      token.get_type()
+    ),
+  }
+  let token = tokens.remove(0);
+  if token.get_type() != &TokenType::Semicolon {
+    panic!(
+      "Last value I know in an assignment statement is a {:?}, not a semicolon",
+      token.get_type()
+    );
+  }
+  n
+}
+
+// "int" <id> [= <exp>] ";"
+fn parse_assignment_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::AssignmentExpression);
+  let token = tokens.remove(0);
+  n.add_data(token.get_value());
+  let exp = parse_expression(tokens);
+  n.add_child(exp);
   n
 }
 
