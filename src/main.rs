@@ -4,7 +4,7 @@ mod parser;
 mod token;
 
 use flexi_logger::*;
-use generator::generate;
+use generator::{generate, Node, NodeType};
 use lexer::lex;
 use log::*;
 use parser::{parse, Prog};
