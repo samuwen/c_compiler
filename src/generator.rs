@@ -89,11 +89,17 @@ impl Node<String> {
   }
 
   fn add_statement_log(&self, out_vec: &mut Vec<String>) {
+    if self.child_count == 0 {
+      let mut statement = String::from("\t\t");
+      statement.push_str(&self.data.join(" "));
+      statement.push_str(";");
+      out_vec.push(statement);
+    }
     for child in self.children.iter() {
       let mut statement_vec = vec![];
       match self.get_type() {
         NodeType::AssignmentStatement => {
-          statement_vec.push(self.data.join(" "));
+          statement_vec.push(self.data.join(" ")); // type and id
           child.add_assignment_log(&mut statement_vec);
         }
         NodeType::ExpressionStatement => {
@@ -122,13 +128,7 @@ impl Node<String> {
   }
 
   fn add_logical_or_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
-    if self.data.len() > 0 {
-      out_vec.push(self.data.get(0).unwrap().to_owned());
-    }
     self.add_generic_log(out_vec);
-    if self.data.len() > 0 {
-      out_vec.push(self.data.last().unwrap().to_owned());
-    }
     self.data.clone()
   }
 
@@ -214,7 +214,12 @@ impl Node<String> {
   fn get_statement_asm(&self, out_vec: &mut Vec<String>) {
     let mut data = vec![];
     for child in self.children.iter() {
-      let mut d = child.get_logical_or_asm(out_vec);
+      let mut d = match child.get_type() {
+        NodeType::BinaryOp => child.get_binary_op_asm(out_vec),
+        NodeType::Integer => child.get_integer_asm(out_vec),
+        NodeType::Factor => child.get_factor_asm(out_vec),
+        _ => panic!("unknown child type {:?}", child.get_type()),
+      };
       data.append(&mut d);
     }
     // if nothing else has been added, we know we just have a single number

@@ -5,6 +5,8 @@ use serde_json::to_string;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
+const UNEXPECTED_ERROR: &str = "Unexpected token type";
+
 // <program> ::= <function>
 #[derive(Debug)]
 pub struct Prog {
@@ -84,7 +86,7 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
     TokenType::ReturnKeyword => parse_return_statement(tokens),
     TokenType::Integer => parse_expression_statement(tokens),
     TokenType::IntKeyword => parse_assignment_statement(tokens),
-    _ => panic!("Unknown statement found: {:?}", token.get_type()),
+    _ => panic!("{}: {}", UNEXPECTED_ERROR, token.get_type()),
   }
 }
 
@@ -96,10 +98,7 @@ fn parse_return_statement(tokens: &mut Vec<Token>) -> Node<String> {
   n.add_child(expression);
   let token = tokens.remove(0);
   if token.get_type() != &TokenType::Semicolon {
-    panic!(
-      "Last value I know in a return statement is a {:?}, not a semicolon",
-      token.get_type()
-    );
+    panic!("{}: {}", UNEXPECTED_ERROR, token.get_type());
   }
   n
 }
@@ -111,10 +110,7 @@ fn parse_expression_statement(tokens: &mut Vec<Token>) -> Node<String> {
   n.add_child(expression);
   let token = tokens.remove(0);
   if token.get_type() != &TokenType::Semicolon {
-    panic!(
-      "Last value I know in an expression statement is a {:?}, not a semicolon",
-      token.get_type()
-    );
+    panic!("{}: {}", UNEXPECTED_ERROR, token.get_type());
   }
   n
 }
@@ -131,89 +127,70 @@ fn parse_assignment_statement(tokens: &mut Vec<Token>) -> Node<String> {
     .expect("assignment ID is last token in statement");
   match token.get_type() {
     TokenType::Assignment => {
-      let expression = parse_assignment_expression(tokens);
+      n.add_data(token.get_value());
+      tokens.remove(0);
+      let expression = parse_expression(tokens);
       n.add_child(expression);
     }
     TokenType::Semicolon => {
-      n.add_child(Node::new(NodeType::AssignmentExpression));
+      ();
     }
-    _ => panic!(
-      "Expected Assignment or Semicolon. Found: {:?}",
-      token.get_type()
-    ),
+    _ => panic!("{}: {}", UNEXPECTED_ERROR, token.get_type()),
   }
   let token = tokens.remove(0);
   if token.get_type() != &TokenType::Semicolon {
-    panic!(
-      "Last value I know in an assignment statement is a {:?}, not a semicolon",
-      token.get_type()
-    );
+    panic!("{}: {}", UNEXPECTED_ERROR, token.get_type());
   }
   n
 }
 
-// "int" <id> [= <exp>] ";"
-fn parse_assignment_expression(tokens: &mut Vec<Token>) -> Node<String> {
+// <exp> ::= <id> "=" <exp> | <logical-or-exp>
+fn parse_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let token = tokens.get(0).expect("Unexpected end of input");
+  match token.get_type() {
+    TokenType::Identifier => parse_assignment_exp(tokens),
+    TokenType::Integer => parse_logical_or_exp(tokens),
+    _ => panic!("{}: {}", UNEXPECTED_ERROR, token.get_type()),
+  }
+}
+
+// <id> "=" <exp>
+fn parse_assignment_exp(tokens: &mut Vec<Token>) -> Node<String> {
   let mut n = Node::new(NodeType::AssignmentExpression);
   let token = tokens.remove(0);
   n.add_data(token.get_value());
+  tokens.remove(0);
   let exp = parse_expression(tokens);
   n.add_child(exp);
   n
 }
 
-// <exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
-fn parse_expression(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(
-    tokens,
-    NodeType::OrExpression,
-    vec![TokenType::Or],
-    parse_logical_and_exp,
-  )
+// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
+fn parse_logical_or_exp(tokens: &mut Vec<Token>) -> Node<String> {
+  parse_exp(tokens, vec![TokenType::And], parse_logical_and_exp)
 }
 
 // <logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
 fn parse_logical_and_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(
-    tokens,
-    NodeType::AndExpression,
-    vec![TokenType::And],
-    parse_bitwise_or_exp,
-  )
+  parse_exp(tokens, vec![TokenType::And], parse_bitwise_or_exp)
 }
 
 fn parse_bitwise_or_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(
-    tokens,
-    NodeType::BitwiseOrExpression,
-    vec![TokenType::BitwiseOr],
-    parse_bitwise_xor_exp,
-  )
+  parse_exp(tokens, vec![TokenType::BitwiseOr], parse_bitwise_xor_exp)
 }
 
 fn parse_bitwise_xor_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(
-    tokens,
-    NodeType::BitwiseXorExpression,
-    vec![TokenType::BitwiseXor],
-    parse_bitwise_and_exp,
-  )
+  parse_exp(tokens, vec![TokenType::BitwiseXor], parse_bitwise_and_exp)
 }
 
 fn parse_bitwise_and_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(
-    tokens,
-    NodeType::BitwiseAndExpression,
-    vec![TokenType::BitwiseAnd],
-    parse_equality_exp,
-  )
+  parse_exp(tokens, vec![TokenType::BitwiseAnd], parse_equality_exp)
 }
 
 // <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
 fn parse_equality_exp(tokens: &mut Vec<Token>) -> Node<String> {
   parse_exp(
     tokens,
-    NodeType::EqualityExpression,
     vec![TokenType::Equal, TokenType::NotEqual],
     parse_relational_exp,
   )
@@ -223,7 +200,6 @@ fn parse_equality_exp(tokens: &mut Vec<Token>) -> Node<String> {
 fn parse_relational_exp(tokens: &mut Vec<Token>) -> Node<String> {
   parse_exp(
     tokens,
-    NodeType::RelationalExpression,
     vec![
       TokenType::GreaterThan,
       TokenType::GreaterThanOrEqual,
@@ -237,7 +213,6 @@ fn parse_relational_exp(tokens: &mut Vec<Token>) -> Node<String> {
 fn parse_shift_exp(tokens: &mut Vec<Token>) -> Node<String> {
   parse_exp(
     tokens,
-    NodeType::ShiftExpression,
     vec![TokenType::BitwiseShl, TokenType::BitwiseShr],
     parse_additive_exp,
   )
@@ -247,7 +222,6 @@ fn parse_shift_exp(tokens: &mut Vec<Token>) -> Node<String> {
 fn parse_additive_exp(tokens: &mut Vec<Token>) -> Node<String> {
   parse_exp(
     tokens,
-    NodeType::AdditiveExpression,
     vec![TokenType::Addition, TokenType::Negation],
     parse_term,
   )
@@ -257,7 +231,6 @@ fn parse_additive_exp(tokens: &mut Vec<Token>) -> Node<String> {
 fn parse_term(tokens: &mut Vec<Token>) -> Node<String> {
   parse_exp(
     tokens,
-    NodeType::Term,
     vec![
       TokenType::Multiplication,
       TokenType::Division,
@@ -269,11 +242,9 @@ fn parse_term(tokens: &mut Vec<Token>) -> Node<String> {
 
 fn parse_exp<F: Fn(&mut Vec<Token>) -> Node<String>>(
   tokens: &mut Vec<Token>,
-  n_type: NodeType,
   t_types: Vec<TokenType>,
   f: F,
 ) -> Node<String> {
-  let mut n = Node::new(n_type);
   let error_message = "Unexpected termination of tokens";
   let mut exp = f(tokens);
   let next = tokens.get(0).expect(error_message);
@@ -288,8 +259,7 @@ fn parse_exp<F: Fn(&mut Vec<Token>) -> Node<String>>(
     exp = bin_op;
     next_type = tokens.get(0).expect(error_message).get_type().clone();
   }
-  n.add_child(exp);
-  n
+  exp
 }
 
 // <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
@@ -319,7 +289,7 @@ fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
       op_node.add_child(factor);
       n.add_child(op_node);
     }
-    _ => panic!("Unexpected child in factor: {:?}", token.get_type()),
+    _ => panic!("{}: {}", UNEXPECTED_ERROR, token.get_type()),
   }
   n
 }
