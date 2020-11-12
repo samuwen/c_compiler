@@ -63,8 +63,7 @@ fn parse_expression(tokens: &mut Vec<Token>) -> Node<String> {
     let next_term = parse_term(tokens);
     let mut binary_op = Node::new(NodeType::BinaryOp);
     binary_op.add_data(op_token.get_value());
-    binary_op.add_child(term);
-    binary_op.add_child(next_term);
+    binary_op.add_children(vec![term, next_term]);
     term = binary_op;
     next = peek_next_token(tokens);
   }
@@ -80,8 +79,7 @@ fn parse_term(tokens: &mut Vec<Token>) -> Node<String> {
     let next_factor = parse_factor(tokens);
     let mut binary_op = Node::new(NodeType::BinaryOp);
     binary_op.add_data(op_token.get_value());
-    binary_op.add_child(factor);
-    binary_op.add_child(next_factor);
+    binary_op.add_children(vec![factor, next_factor]);
     factor = binary_op;
     next = peek_next_token(tokens);
   }

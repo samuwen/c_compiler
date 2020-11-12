@@ -42,6 +42,10 @@ impl Node<String> {
     self.children.push(child);
   }
 
+  pub fn add_children(&mut self, mut children: Vec<Node<String>>) {
+    self.children.append(&mut children);
+  }
+
   fn get_type(&self) -> &NodeType {
     &self._type
   }
