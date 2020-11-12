@@ -22,8 +22,6 @@ fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   let mut n = Node::new(NodeType::Function);
   let token = get_next_token(tokens);
   check_type(&TokenType::IntKeyword, &token);
-  let data_type = token.get_value();
-  n.add_data(data_type);
   let token = get_next_token(tokens);
   check_type(&TokenType::Identifier, &token);
   let id = token.get_value();
@@ -56,11 +54,68 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
   n
 }
 
-// <exp> ::= <int>
+// <exp> ::= <term> { ("+" | "-") <term> }
 fn parse_expression(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::Expression);
-  n.add_child(parse_integer(tokens));
-  n
+  let mut term = parse_term(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_add_or_sub() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_term(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_child(term);
+    binary_op.add_child(next_term);
+    term = binary_op;
+    next = peek_next_token(tokens);
+  }
+  term
+}
+
+// <term> ::= <factor> { ("*" | "/") <factor> }
+fn parse_term(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut factor = parse_factor(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_mul_or_div() {
+    let op_token = get_next_token(tokens);
+    let next_factor = parse_factor(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_child(factor);
+    binary_op.add_child(next_factor);
+    factor = binary_op;
+    next = peek_next_token(tokens);
+  }
+  factor
+}
+
+// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
+fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
+  let next = peek_next_token(tokens);
+  let expression = match next.get_type() {
+    TokenType::OParen => {
+      get_next_token(tokens);
+      let expression = parse_expression(tokens);
+      let token = get_next_token(tokens);
+      check_type(&TokenType::CParen, &token);
+      expression
+    }
+    TokenType::Integer => parse_integer(tokens),
+    TokenType::BitwiseComplement | TokenType::LogicalNegation | TokenType::Negation => {
+      parse_unary_op(tokens)
+    }
+    _ => panic!("Stuff"),
+  };
+  expression
+}
+
+// <unary_op> ::= "!" | "~" | "-"
+fn parse_unary_op(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut node = Node::new(NodeType::UnaryOp);
+  let operator_token = get_next_token(tokens);
+  node.add_data(operator_token.get_value());
+  let expression = parse_expression(tokens);
+  node.add_child(expression);
+  node
 }
 
 // <exp> ::= <int>

@@ -42,6 +42,10 @@ impl Node<String> {
     self.children.push(child);
   }
 
+  fn get_type(&self) -> &NodeType {
+    &self._type
+  }
+
   pub fn generate_asm(&self, out_vec: &mut Vec<String>) {
     self.generate_program_asm(out_vec);
   }
@@ -53,7 +57,7 @@ impl Node<String> {
   }
 
   pub fn generate_function_asm(&self, out_vec: &mut Vec<String>) {
-    let name = self.data.get(1).unwrap();
+    let name = self.data.get(0).unwrap();
     out_vec.push(format!(".globl {}", name));
     out_vec.push(format!("{}:", name));
     WS_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -64,25 +68,39 @@ impl Node<String> {
 
   pub fn generate_statement_asm(&self, out_vec: &mut Vec<String>) {
     for child in self.children.iter() {
-      child.generate_expression_asm(out_vec);
+      match child.get_type() {
+        NodeType::Integer => child.generate_integer_asm(out_vec),
+        NodeType::UnaryOp => child.generate_unary_op_asm(out_vec),
+        _ => panic!("the disco"),
+      }
     }
     out_vec.push(format!("{}ret", get_separator()));
   }
 
-  pub fn generate_expression_asm(&self, out_vec: &mut Vec<String>) {
+  fn generate_unary_op_asm(&self, out_vec: &mut Vec<String>) {
     for child in self.children.iter() {
-      child.generate_integer_asm(out_vec);
+      match child.get_type() {
+        NodeType::Integer => child.generate_integer_asm(out_vec),
+        NodeType::UnaryOp => child.generate_unary_op_asm(out_vec),
+        _ => panic!("the disco"),
+      }
+    }
+    let sep = get_separator();
+    match self.data.get(0).unwrap().as_str() {
+      "~" => out_vec.push(format!("{}not\t%eax", sep)),
+      "-" => out_vec.push(format!("{}neg\t%eax", sep)),
+      "!" => {
+        out_vec.push(format!("{}cmpl\t$0, %eax", sep));
+        out_vec.push(format!("{}movl\t$0, %eax", sep));
+        out_vec.push(format!("{}sete\t%al", sep));
+      }
+      _ => panic!("the disco"),
     }
   }
 
   pub fn generate_integer_asm(&self, out_vec: &mut Vec<String>) {
     let sep = get_separator();
-    out_vec.push(format!(
-      "{}movl{}${}, %eax",
-      sep,
-      sep,
-      self.data.get(0).unwrap()
-    ));
+    out_vec.push(format!("{}movl\t${}, %eax", sep, self.data.get(0).unwrap()));
   }
 
   fn format_self(&self, count: usize) -> String {
@@ -114,6 +132,7 @@ pub enum NodeType {
   Program,
   Function,
   Statement,
-  Expression,
   Integer,
+  UnaryOp,
+  BinaryOp,
 }

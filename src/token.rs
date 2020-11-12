@@ -24,6 +24,27 @@ impl Token {
   pub fn get_value(&self) -> String {
     self.value.to_owned()
   }
+
+  pub fn is_unary_op(&self) -> bool {
+    match self.get_type() {
+      TokenType::Negation | TokenType::BitwiseComplement | TokenType::LogicalNegation => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_add_or_sub(&self) -> bool {
+    match self.get_type() {
+      TokenType::Addition | TokenType::Negation => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_mul_or_div(&self) -> bool {
+    match self.get_type() {
+      TokenType::Multiplication | TokenType::Division => true,
+      _ => false,
+    }
+  }
 }
 
 impl PartialOrd for Token {
