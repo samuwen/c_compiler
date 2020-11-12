@@ -150,6 +150,15 @@ fn parse_expression(tokens: &mut Vec<Token>) -> Node<String> {
   match token.get_type() {
     TokenType::Identifier => parse_assignment_exp(tokens),
     TokenType::Integer => parse_logical_or_exp(tokens),
+    TokenType::OParen => {
+      tokens.remove(0);
+      let exp = parse_expression(tokens);
+      let token = tokens.remove(0);
+      if token.get_type() != &TokenType::CParen {
+        panic!("{}: {}", UNEXPECTED_ERROR, token.get_type());
+      }
+      exp
+    }
     _ => panic!("{}: {}", UNEXPECTED_ERROR, token.get_type()),
   }
 }
@@ -167,7 +176,7 @@ fn parse_assignment_exp(tokens: &mut Vec<Token>) -> Node<String> {
 
 // <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
 fn parse_logical_or_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(tokens, vec![TokenType::And], parse_logical_and_exp)
+  parse_exp(tokens, vec![TokenType::Or], parse_logical_and_exp)
 }
 
 // <logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
@@ -264,7 +273,6 @@ fn parse_exp<F: Fn(&mut Vec<Token>) -> Node<String>>(
 
 // <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
 fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::Factor);
   let token = tokens.remove(0);
   match token.get_type() {
     TokenType::OParen => {
@@ -275,21 +283,20 @@ fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
         panic!("Open paren does not have matching close paren");
       }
       exp.add_data(token.get_type().to_string());
-      n.add_child(exp);
+      exp
     }
     TokenType::Integer => {
       let mut int_node = Node::new(NodeType::Integer);
       int_node.add_data(token.get_value());
-      n.add_child(int_node);
+      int_node
     }
     TokenType::BitwiseComplement | TokenType::Negation | TokenType::LogicalNegation => {
       let mut op_node = Node::new(NodeType::UnaryOp);
       op_node.add_data(token.get_type().to_string());
       let factor = parse_factor(tokens);
       op_node.add_child(factor);
-      n.add_child(op_node);
+      op_node
     }
     _ => panic!("{}: {}", UNEXPECTED_ERROR, token.get_type()),
   }
-  n
 }

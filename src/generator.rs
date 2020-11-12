@@ -1,4 +1,5 @@
 use crate::Prog;
+use log::*;
 use serde::Serialize;
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -55,6 +56,10 @@ impl<T> Node<T> {
 
   pub fn get_type(&self) -> &NodeType {
     &self._type
+  }
+
+  pub fn get_data(&self) -> &Vec<T> {
+    &self.data
   }
 }
 
@@ -282,34 +287,53 @@ impl Node<String> {
   }
 
   fn get_binary_op_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
-    let mut data = self.get_generic_asm(out_vec);
-    if data.len() != 2 {
-      panic!("Binary op data vec has {} elements", data.len());
+    let mut data: Vec<String> = vec![];
+    for child in self.children.iter() {
+      match child.get_type() {
+        NodeType::BinaryOp => {
+          child.get_binary_op_asm(out_vec);
+        }
+        NodeType::Integer => {
+          data.append(&mut child.get_data().clone());
+        }
+        _ => panic!("Unknown child for binary op: {:?}", child.get_type()),
+      }
     }
-    let d2 = data.remove(1);
+    if data.len() != 2 {
+      warn!("Binary op data vec has {} elements", data.len());
+    }
+    let d2 = data.get(1);
     let d1 = data.get(0).unwrap();
     let mut handle_comparison = || {
-      self.load_arithmetic_asm(out_vec, d1, &d2);
+      self.load_arithmetic_asm(out_vec, d1, d2);
       out_vec.push(format!("\tcmpl\t%eax, %ecx"));
       out_vec.push(format!("\tmovl\t$0, %eax"));
     };
     match self.data.get(0).unwrap().as_str() {
       "+" => {
-        self.load_arithmetic_asm(out_vec, d1, &d2);
+        self.load_arithmetic_asm(out_vec, d1, d2);
         out_vec.push(format!("\taddl\t%ecx, %eax"));
       }
       "*" => {
-        self.load_arithmetic_asm(out_vec, d1, &d2);
+        self.load_arithmetic_asm(out_vec, d1, d2);
         out_vec.push(format!("\timul\t%ecx, %eax"));
       }
       "-" => {
-        self.load_arithmetic_asm(out_vec, d1, &d2);
+        self.load_arithmetic_asm(out_vec, d1, d2);
         out_vec.push(format!("\tsubl\t%eax, %ecx"));
         out_vec.push(format!("\tmovl\t%ecx, %eax"));
       }
       "/" => {
-        self.load_eax_reg(out_vec, &d1);
-        self.load_reg(out_vec, &d2, "ecx");
+        match d2 {
+          Some(value) => {
+            self.load_eax_reg(out_vec, &d1);
+            self.load_reg(out_vec, &value, "ecx");
+          }
+          None => {
+            out_vec.push(String::from("\tmovl\t%eax, %ecx"));
+            self.load_eax_reg(out_vec, &d1);
+          }
+        }
         out_vec.push(format!("\tcdq"));
         out_vec.push(format!("\tidivl\t%ecx"));
       }
@@ -340,58 +364,80 @@ impl Node<String> {
       "||" => {
         let label1 = get_next_label();
         let label2 = get_next_label();
-        self.load_eax_reg(out_vec, d1);
-        out_vec.push(format!("\tcmpl\t$0, %eax"));
-        out_vec.push(format!("\tje\t{}", label1));
-        out_vec.push(format!("\tmovl\t$1, %eax"));
-        out_vec.push(format!("\tjmp\t{}", label2));
-        out_vec.push(format!("{}:", label1));
-        self.load_eax_reg(out_vec, &d2);
-        out_vec.push(format!("\tcmpl\t$0, %eax"));
-        out_vec.push(format!("\tmovl\t$0, %eax"));
-        out_vec.push(format!("\tsetne\t%al"));
-        out_vec.push(format!("{}:", label2));
+        match d2 {
+          Some(value) => {
+            self.load_eax_reg(out_vec, d1);
+            out_vec.push(format!("\tcmpl\t$0, %eax"));
+            out_vec.push(format!("\tje\t{}", label1));
+            out_vec.push(format!("\tmovl\t$1, %eax"));
+            out_vec.push(format!("\tjmp\t{}", label2));
+            out_vec.push(format!("{}:", label1));
+            self.load_eax_reg(out_vec, value);
+            out_vec.push(format!("\tcmpl\t$0, %eax"));
+            out_vec.push(format!("\tmovl\t$0, %eax"));
+            out_vec.push(format!("\tsetne\t%al"));
+            out_vec.push(format!("{}:", label2));
+          }
+          None => {
+            self.load_eax_reg(out_vec, d1);
+            out_vec.push(format!("\tcmpl\t$0, %eax"));
+            out_vec.push(format!("\tmovl\t$0, %eax"));
+            out_vec.push(format!("\tsetne\t%al"));
+            out_vec.push(format!("{}:", label2));
+          }
+        }
       }
       "&&" => {
         let label1 = get_next_label();
         let label2 = get_next_label();
-        self.load_eax_reg(out_vec, d1);
-        out_vec.push(format!("\tcmpl\t$0, %eax"));
-        out_vec.push(format!("\tjne\t{}", label1));
-        out_vec.push(format!("\tjmp\t{}", label2));
-        out_vec.push(format!("{}:", label1));
-        self.load_eax_reg(out_vec, &d2);
-        out_vec.push(format!("\tcmpl\t$0, %eax"));
-        out_vec.push(format!("\tmovl\t$0, %eax"));
-        out_vec.push(format!("\tsetne\t%al"));
-        out_vec.push(format!("{}:", label2));
+        match d2 {
+          Some(value) => {
+            self.load_eax_reg(out_vec, d1);
+            out_vec.push(format!("\tcmpl\t$0, %eax"));
+            out_vec.push(format!("\tjne\t{}", label1));
+            out_vec.push(format!("\tjmp\t{}", label2));
+            out_vec.push(format!("{}:", label1));
+            self.load_eax_reg(out_vec, value);
+            out_vec.push(format!("\tcmpl\t$0, %eax"));
+            out_vec.push(format!("\tmovl\t$0, %eax"));
+            out_vec.push(format!("\tsetne\t%al"));
+            out_vec.push(format!("{}:", label2));
+          }
+          None => {
+            self.load_eax_reg(out_vec, d1);
+            out_vec.push(format!("\tcmpl\t$0, %eax"));
+            out_vec.push(format!("\tmovl\t$0, %eax"));
+            out_vec.push(format!("\tsetne\t%al"));
+            out_vec.push(format!("{}:", label2));
+          }
+        }
       }
       "%" => {
         self.load_eax_reg(out_vec, &d1);
-        self.load_reg(out_vec, &d2, "ecx");
+        self.load_reg(out_vec, d2.expect("no d2 found"), "ecx");
         out_vec.push(format!("\tcdq"));
         out_vec.push(format!("\tidivl\t%ecx"));
         out_vec.push(format!("\tmovl\t%edx, %eax"));
       }
       "&" => {
-        self.load_arithmetic_asm(out_vec, d1, &d2);
+        self.load_arithmetic_asm(out_vec, d1, d2);
         out_vec.push(format!("\tand\t%ecx, %eax"));
       }
       "|" => {
-        self.load_arithmetic_asm(out_vec, d1, &d2);
+        self.load_arithmetic_asm(out_vec, d1, d2);
         out_vec.push(format!("\tor\t%ecx, %eax"));
       }
       "^" => {
-        self.load_arithmetic_asm(out_vec, d1, &d2);
+        self.load_arithmetic_asm(out_vec, d1, d2);
         out_vec.push(format!("\txor\t%ecx, %eax"));
       }
       "<<" => {
-        self.load_reg(out_vec, &d2, "ecx");
+        self.load_reg(out_vec, &d2.expect("No d2 found"), "ecx");
         self.load_eax_reg(out_vec, d1);
         out_vec.push(format!("\tsall\t%cl, %eax"));
       }
       ">>" => {
-        self.load_reg(out_vec, &d2, "ecx");
+        self.load_reg(out_vec, d2.expect("No d2 found"), "ecx");
         self.load_eax_reg(out_vec, d1);
         out_vec.push(format!("\tsarl\t%cl, %eax"));
       }
@@ -408,11 +454,21 @@ impl Node<String> {
     self.load_reg(out_vec, num, "eax");
   }
 
-  fn load_arithmetic_asm(&self, out_vec: &mut Vec<String>, d1: &String, d2: &String) {
-    self.load_eax_reg(out_vec, d1);
-    out_vec.push(format!("\tpush\t%eax"));
-    self.load_eax_reg(out_vec, d2);
-    out_vec.push(format!("\tpop\t%ecx"));
+  fn load_arithmetic_asm(&self, out: &mut Vec<String>, d1: &String, d2: Option<&String>) {
+    match d2 {
+      Some(value) => {
+        self.load_reg(out, d1, "ecx");
+        // out.push(format!("\tpush\t%eax"));
+        self.load_eax_reg(out, &value);
+        // out.push(format!("\tpop\t%ecx"));
+      }
+      None => {
+        // out.push(format!("\tpush\t%eax"));
+        out.push(format!("\tmovl\t%eax, %ecx"));
+        self.load_eax_reg(out, &d1);
+        // out.push(format!("\tpop\t%ecx"));
+      }
+    }
   }
 
   fn get_factor_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
