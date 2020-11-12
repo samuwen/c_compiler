@@ -149,17 +149,7 @@ fn parse_expression(tokens: &mut Vec<Token>) -> Node<String> {
   let token = tokens.get(0).expect("Unexpected end of input");
   match token.get_type() {
     TokenType::Identifier => parse_assignment_exp(tokens),
-    TokenType::Integer => parse_logical_or_exp(tokens),
-    TokenType::OParen => {
-      tokens.remove(0);
-      let exp = parse_expression(tokens);
-      let token = tokens.remove(0);
-      if token.get_type() != &TokenType::CParen {
-        panic!("{}: {}", UNEXPECTED_ERROR, token.get_type());
-      }
-      exp
-    }
-    _ => panic!("{}: {}", UNEXPECTED_ERROR, token.get_type()),
+    _ => parse_logical_or_exp(tokens),
   }
 }
 

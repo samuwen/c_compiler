@@ -50,10 +50,6 @@ impl<T> Node<T> {
     self.data.push(data);
   }
 
-  pub fn get_children(&self) -> &Vec<Node<T>> {
-    &self.children
-  }
-
   pub fn get_type(&self) -> &NodeType {
     &self._type
   }
@@ -195,7 +191,7 @@ impl Node<String> {
   fn add_unary_op_log(&self, out_vec: &mut Vec<String>) -> Vec<String> {
     out_vec.push(self.data.get(0).expect("Unary op has no op").to_owned());
     for child in self.children.iter() {
-      child.add_factor_log(out_vec);
+      child.add_integer_log(out_vec);
     }
     self.data.clone()
   }
@@ -223,6 +219,7 @@ impl Node<String> {
         NodeType::BinaryOp => child.get_binary_op_asm(out_vec),
         NodeType::Integer => child.get_integer_asm(out_vec),
         NodeType::Factor => child.get_factor_asm(out_vec),
+        NodeType::UnaryOp => child.get_unary_op_asm(out_vec),
         _ => panic!("unknown child type {:?}", child.get_type()),
       };
       data.append(&mut d);
@@ -295,6 +292,9 @@ impl Node<String> {
         }
         NodeType::Integer => {
           data.append(&mut child.get_data().clone());
+        }
+        NodeType::UnaryOp => {
+          child.get_unary_op_asm(out_vec);
         }
         _ => panic!("Unknown child for binary op: {:?}", child.get_type()),
       }
@@ -379,6 +379,11 @@ impl Node<String> {
             out_vec.push(format!("{}:", label2));
           }
           None => {
+            out_vec.push(format!("\tcmpl\t$0, %eax"));
+            out_vec.push(format!("\tje\t{}", label1));
+            out_vec.push(format!("\tmovl\t$1, %eax"));
+            out_vec.push(format!("\tjmp\t{}", label2));
+            out_vec.push(format!("{}:", label1));
             self.load_eax_reg(out_vec, d1);
             out_vec.push(format!("\tcmpl\t$0, %eax"));
             out_vec.push(format!("\tmovl\t$0, %eax"));
@@ -404,6 +409,10 @@ impl Node<String> {
             out_vec.push(format!("{}:", label2));
           }
           None => {
+            out_vec.push(format!("\tcmpl\t$0, %eax"));
+            out_vec.push(format!("\tjne\t{}", label1));
+            out_vec.push(format!("\tjmp\t{}", label2));
+            out_vec.push(format!("{}:", label1));
             self.load_eax_reg(out_vec, d1);
             out_vec.push(format!("\tcmpl\t$0, %eax"));
             out_vec.push(format!("\tmovl\t$0, %eax"));
@@ -476,12 +485,12 @@ impl Node<String> {
   }
 
   fn get_unary_op_asm(&self, out_vec: &mut Vec<String>) -> Vec<String> {
-    let mut data = vec![];
+    let mut data = self.data.clone();
     for child in self.children.iter() {
-      let mut result = child.get_factor_asm(out_vec);
+      let mut result = child.get_integer_asm(out_vec);
       data.append(&mut result);
     }
-    self.load_eax_reg(out_vec, data.get(0).unwrap());
+    self.load_eax_reg(out_vec, data.get(1).unwrap());
     match self.data.get(0).expect("Unary op has no op").as_str() {
       "~" => out_vec.push(format!("\tnot\t%eax")),
       "-" => out_vec.push(format!("\tneg\t%eax")),

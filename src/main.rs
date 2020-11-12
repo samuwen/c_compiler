@@ -1,13 +1,17 @@
-mod generator;
+// mod generator;
 mod lexer;
-mod parser;
+// mod parser;
+mod gen2;
+mod parse2;
 mod token;
 
 use flexi_logger::*;
-use generator::{generate, Node, NodeType};
+// use generator::{generate, Node, NodeType};
+use gen2::{generate, Node, NodeType};
 use lexer::lex;
 use log::*;
-use parser::{parse, Prog};
+// use parser::{parse, Prog};
+use parse2::{parse, Tree};
 use std::env;
 use std::fs::{read_to_string, write};
 use std::process::Command;
