@@ -2,8 +2,6 @@ use crate::{Node, NodeType, Token, TokenType};
 use log::*;
 use std::fmt;
 
-const UNEXPECTED_ERROR: &str = "Unexpected token type";
-
 pub fn parse(mut tokens: Vec<Token>) -> Tree {
   let mut tree = Tree::new();
   tree.add_node(parse_program(&mut tokens));
@@ -48,14 +46,78 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
   let mut n = Node::new(NodeType::Statement);
   let token = get_next_token(tokens);
   check_type(&TokenType::ReturnKeyword, &token);
-  n.add_child(parse_expression(tokens));
+  n.add_child(parse_logical_or_expression(tokens));
   let token = get_next_token(tokens);
   check_type(&TokenType::Semicolon, &token);
   n
 }
 
-// <exp> ::= <term> { ("+" | "-") <term> }
-fn parse_expression(tokens: &mut Vec<Token>) -> Node<String> {
+// <exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
+fn parse_logical_or_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut and_exp = parse_logical_and_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_logical_or() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_logical_and_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![and_exp, next_term]);
+    and_exp = binary_op;
+    next = peek_next_token(tokens);
+  }
+  and_exp
+}
+
+// <logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
+fn parse_logical_and_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut equality_exp = parse_equality_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_logical_and() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_equality_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![equality_exp, next_term]);
+    equality_exp = binary_op;
+    next = peek_next_token(tokens);
+  }
+  equality_exp
+}
+
+// <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
+fn parse_equality_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut term = parse_relational_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_equality() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_relational_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![term, next_term]);
+    term = binary_op;
+    next = peek_next_token(tokens);
+  }
+  term
+}
+
+// <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
+fn parse_relational_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut term = parse_additive_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_relational() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_additive_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![term, next_term]);
+    term = binary_op;
+    next = peek_next_token(tokens);
+  }
+  term
+}
+
+// <additive-exp> ::= <term> { ("+" | "-") <term> }
+fn parse_additive_expression(tokens: &mut Vec<Token>) -> Node<String> {
   let mut term = parse_term(tokens);
   let mut next = peek_next_token(tokens);
   while next.is_add_or_sub() {
@@ -92,7 +154,7 @@ fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
   let expression = match next.get_type() {
     TokenType::OParen => {
       get_next_token(tokens);
-      let expression = parse_expression(tokens);
+      let expression = parse_logical_or_expression(tokens);
       let token = get_next_token(tokens);
       check_type(&TokenType::CParen, &token);
       expression
@@ -101,7 +163,7 @@ fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
     TokenType::BitwiseComplement | TokenType::LogicalNegation | TokenType::Negation => {
       parse_unary_op(tokens)
     }
-    _ => panic!("Stuff"),
+    _ => panic!("Unexpected token: {:?}", next.get_type()),
   };
   expression
 }
@@ -111,7 +173,7 @@ fn parse_unary_op(tokens: &mut Vec<Token>) -> Node<String> {
   let mut node = Node::new(NodeType::UnaryOp);
   let operator_token = get_next_token(tokens);
   node.add_data(operator_token.get_value());
-  let expression = parse_expression(tokens);
+  let expression = parse_logical_or_expression(tokens);
   node.add_child(expression);
   node
 }
@@ -127,7 +189,11 @@ fn parse_integer(tokens: &mut Vec<Token>) -> Node<String> {
 
 fn check_type(expected: &TokenType, actual: &Token) {
   if expected != actual.get_type() {
-    panic!("Expected {:?} token but got {:?} token");
+    panic!(
+      "Expected {:?} token but got {:?} token",
+      expected,
+      actual.get_type()
+    );
   }
 }
 
@@ -152,8 +218,8 @@ impl Tree {
     self.nodes.push(node);
   }
 
-  pub fn generate_asm(&self, out_vec: &mut Vec<String>) {
-    for node in self.nodes.iter() {
+  pub fn generate_asm(&mut self, out_vec: &mut Vec<String>) {
+    for node in self.nodes.iter_mut() {
       node.generate_asm(out_vec);
     }
   }

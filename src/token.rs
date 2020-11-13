@@ -25,7 +25,7 @@ impl Token {
     self.value.to_owned()
   }
 
-  pub fn is_unary_op(&self) -> bool {
+  pub fn _is_unary_op(&self) -> bool {
     match self.get_type() {
       TokenType::Negation | TokenType::BitwiseComplement | TokenType::LogicalNegation => true,
       _ => false,
@@ -42,6 +42,37 @@ impl Token {
   pub fn is_mul_or_div(&self) -> bool {
     match self.get_type() {
       TokenType::Multiplication | TokenType::Division => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_logical_or(&self) -> bool {
+    match self.get_type() {
+      TokenType::Or => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_logical_and(&self) -> bool {
+    match self.get_type() {
+      TokenType::And => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_equality(&self) -> bool {
+    match self.get_type() {
+      TokenType::Equal | TokenType::NotEqual => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_relational(&self) -> bool {
+    match self.get_type() {
+      TokenType::LessThan
+      | TokenType::LessThanOrEqual
+      | TokenType::GreaterThan
+      | TokenType::GreaterThanOrEqual => true,
       _ => false,
     }
   }
