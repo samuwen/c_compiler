@@ -1,292 +1,296 @@
-use crate::{Node, NodeType};
-use crate::{Token, TokenType};
+use crate::{Node, NodeType, Token, TokenType};
 use log::*;
-use serde_json::to_string;
 use std::fmt;
-use std::fmt::{Display, Formatter};
 
-const UNEXPECTED_ERROR: &str = "Unexpected token type";
-
-// <program> ::= <function>
-#[derive(Debug)]
-pub struct Prog {
-  function: Node<String>,
+pub fn parse(mut tokens: Vec<Token>) -> Tree {
+  let mut tree = Tree::new();
+  tree.add_node(parse_program(&mut tokens));
+  debug!("\n{}", tree);
+  tree
 }
 
-impl Prog {
-  fn new(fun: Node<String>) -> Prog {
-    Prog { function: fun }
-  }
-
-  pub fn get_function(&self) -> &Node<String> {
-    &self.function
-  }
+fn parse_program(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::Program);
+  n.add_child(parse_function(tokens));
+  n
 }
 
-impl Display for Prog {
-  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    write!(f, "{}", self.function)
-  }
-}
-
-pub fn parse(mut tokens: Vec<Token>) -> Prog {
-  let function = parse_function(&mut tokens);
-  let json = to_string(&function).unwrap();
-  std::fs::write("out.json", &json).expect("Failed to write");
-  debug!("{}", function);
-  Prog::new(function)
-}
-
-// <function> ::= "int" <id> "(" ")" "{" { <statement> } "}"
+// <function> ::= "int" <id> "(" ")" "{" <statement> "}"
 fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   let mut n = Node::new(NodeType::Function);
-  let token = tokens.remove(0);
-  if token.get_type() != &TokenType::IntKeyword {
-    panic!("Int not at start of function declaration");
-  }
-  let data_type = token.get_value();
-  n.add_data(data_type);
-  let token = tokens.remove(0);
-  if token.get_type() != &TokenType::Identifier {
-    panic!("Function declaration does not have a name");
-  }
+  let token = get_next_token(tokens);
+  check_type(&TokenType::IntKeyword, &token);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::Identifier, &token);
   let id = token.get_value();
   n.add_data(id);
-  let token = tokens.remove(0);
-  if token.get_type() != &TokenType::OParen {
-    panic!("Function declaration does not have parens");
-  }
-  n.add_data(String::from("("));
-  let token = tokens.remove(0);
-  if token.get_type() != &TokenType::CParen {
-    panic!("Function declaration does not have parens");
-  }
-  n.add_data(String::from(")"));
-  let token = tokens.remove(0);
-  if token.get_type() != &TokenType::OBrace {
-    panic!("Function declaration not followed by brace");
-  }
-  let mut next = tokens.get(0).expect("Unexpected statement truncation");
+  let token = get_next_token(tokens);
+  check_type(&TokenType::OParen, &token);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::CParen, &token);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::OBrace, &token);
+  let mut next = peek_next_token(tokens);
   while next.get_type() != &TokenType::CBrace {
     let statement = parse_statement(tokens);
     n.add_child(statement);
-    next = tokens.get(0).expect("Unexpected statement truncation");
+    next = peek_next_token(tokens);
   }
-  let token = tokens.remove(0);
-  if token.get_type() != &TokenType::CBrace {
-    panic!("Function declaration not closed by brace");
-  }
+  let token = get_next_token(tokens);
+  check_type(&TokenType::CBrace, &token);
   n
 }
 
-// <statement> ::= <return-statement> | <expression-statement> | <assignment-statement>
+// <statement> ::= "return" <exp> ";"
 fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  let token = tokens.get(0).unwrap();
-  match token.get_type() {
-    TokenType::ReturnKeyword => parse_return_statement(tokens),
-    TokenType::Integer => parse_expression_statement(tokens),
-    TokenType::IntKeyword => parse_assignment_statement(tokens),
-    _ => panic!("{}: {}", UNEXPECTED_ERROR, token.get_type()),
-  }
-}
-
-// <return-statement> ::= "return" <exp> ";"
-fn parse_return_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::ReturnStatement);
-  tokens.remove(0);
-  let expression = parse_expression(tokens);
-  n.add_child(expression);
-  let token = tokens.remove(0);
-  if token.get_type() != &TokenType::Semicolon {
-    panic!("{}: {}", UNEXPECTED_ERROR, token.get_type());
-  }
+  let mut n = Node::new(NodeType::Statement);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::ReturnKeyword, &token);
+  n.add_child(parse_logical_or_expression(tokens));
+  let token = get_next_token(tokens);
+  check_type(&TokenType::Semicolon, &token);
   n
 }
 
-// <exp> ";"
-fn parse_expression_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::ExpressionStatement);
-  let expression = parse_expression(tokens);
-  n.add_child(expression);
-  let token = tokens.remove(0);
-  if token.get_type() != &TokenType::Semicolon {
-    panic!("{}: {}", UNEXPECTED_ERROR, token.get_type());
+// <exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
+fn parse_logical_or_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut and_exp = parse_logical_and_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_logical_or() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_logical_and_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![and_exp, next_term]);
+    and_exp = binary_op;
+    next = peek_next_token(tokens);
   }
-  n
+  and_exp
 }
 
-// "int" <id> [= <exp>] ";"
-fn parse_assignment_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::AssignmentStatement);
-  let token = tokens.remove(0);
-  n.add_data(token.get_value());
-  let id_token = tokens.remove(0);
-  n.add_data(id_token.get_value());
-  let token = tokens
-    .get(0)
-    .expect("assignment ID is last token in statement");
-  match token.get_type() {
-    TokenType::Assignment => {
-      n.add_data(token.get_value());
-      tokens.remove(0);
-      let expression = parse_expression(tokens);
-      n.add_child(expression);
-    }
-    TokenType::Semicolon => {
-      ();
-    }
-    _ => panic!("{}: {}", UNEXPECTED_ERROR, token.get_type()),
+// <logical-and-exp> ::= <bitwise-or-exp> { "&&" <bitwise-or-exp> }
+fn parse_logical_and_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut bitwise_or = parse_bitwise_or_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_logical_and() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_bitwise_or_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![bitwise_or, next_term]);
+    bitwise_or = binary_op;
+    next = peek_next_token(tokens);
   }
-  let token = tokens.remove(0);
-  if token.get_type() != &TokenType::Semicolon {
-    panic!("{}: {}", UNEXPECTED_ERROR, token.get_type());
+  bitwise_or
+}
+
+// <bitwise-or-exp> ::= <bitwise-xor-exp> { "&&" <bitwise-xor-exp> }
+fn parse_bitwise_or_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut bitwise_xor_exp = parse_bitwise_xor_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_bitwise_or() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_bitwise_xor_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![bitwise_xor_exp, next_term]);
+    bitwise_xor_exp = binary_op;
+    next = peek_next_token(tokens);
   }
-  n
+  bitwise_xor_exp
 }
 
-// <exp> ::= <id> "=" <exp> | <logical-or-exp>
-fn parse_expression(tokens: &mut Vec<Token>) -> Node<String> {
-  let token = tokens.get(0).expect("Unexpected end of input");
-  match token.get_type() {
-    TokenType::Identifier => parse_assignment_exp(tokens),
-    _ => parse_logical_or_exp(tokens),
+// <bitwise-xor-exp> ::= <bitwise-and-exp> { "&&" <bitwise-and-exp> }
+fn parse_bitwise_xor_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut bitwise_and_exp = parse_bitwise_and_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_bitwise_xor() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_bitwise_and_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![bitwise_and_exp, next_term]);
+    bitwise_and_exp = binary_op;
+    next = peek_next_token(tokens);
   }
+  bitwise_and_exp
 }
 
-// <id> "=" <exp>
-fn parse_assignment_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::AssignmentExpression);
-  let token = tokens.remove(0);
-  n.add_data(token.get_value());
-  tokens.remove(0);
-  let exp = parse_expression(tokens);
-  n.add_child(exp);
-  n
-}
-
-// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
-fn parse_logical_or_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(tokens, vec![TokenType::Or], parse_logical_and_exp)
-}
-
-// <logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
-fn parse_logical_and_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(tokens, vec![TokenType::And], parse_bitwise_or_exp)
-}
-
-fn parse_bitwise_or_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(tokens, vec![TokenType::BitwiseOr], parse_bitwise_xor_exp)
-}
-
-fn parse_bitwise_xor_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(tokens, vec![TokenType::BitwiseXor], parse_bitwise_and_exp)
-}
-
-fn parse_bitwise_and_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(tokens, vec![TokenType::BitwiseAnd], parse_equality_exp)
+// <bitwise-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
+fn parse_bitwise_and_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut equality_exp = parse_equality_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_bitwise_and() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_equality_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![equality_exp, next_term]);
+    equality_exp = binary_op;
+    next = peek_next_token(tokens);
+  }
+  equality_exp
 }
 
 // <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
-fn parse_equality_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(
-    tokens,
-    vec![TokenType::Equal, TokenType::NotEqual],
-    parse_relational_exp,
-  )
+fn parse_equality_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut term = parse_relational_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_equality() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_relational_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![term, next_term]);
+    term = binary_op;
+    next = peek_next_token(tokens);
+  }
+  term
 }
 
-// <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
-fn parse_relational_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(
-    tokens,
-    vec![
-      TokenType::GreaterThan,
-      TokenType::GreaterThanOrEqual,
-      TokenType::LessThan,
-      TokenType::LessThanOrEqual,
-    ],
-    parse_shift_exp,
-  )
+// <relational-exp> ::= <shift-exp> { ("<" | ">" | "<=" | ">=") <shift-exp> }
+fn parse_relational_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut term = parse_shift_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_relational() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_shift_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![term, next_term]);
+    term = binary_op;
+    next = peek_next_token(tokens);
+  }
+  term
 }
 
-fn parse_shift_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(
-    tokens,
-    vec![TokenType::BitwiseShl, TokenType::BitwiseShr],
-    parse_additive_exp,
-  )
+// <shift-exp> ::= <additive-exp> { ("<<" | ">>") <additive-exp> }
+fn parse_shift_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut additive_exp = parse_additive_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_shift() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_additive_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![additive_exp, next_term]);
+    additive_exp = binary_op;
+    next = peek_next_token(tokens);
+  }
+  additive_exp
 }
 
 // <additive-exp> ::= <term> { ("+" | "-") <term> }
-fn parse_additive_exp(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(
-    tokens,
-    vec![TokenType::Addition, TokenType::Negation],
-    parse_term,
-  )
+fn parse_additive_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut term = parse_term(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_add_or_sub() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_term(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![term, next_term]);
+    term = binary_op;
+    next = peek_next_token(tokens);
+  }
+  term
 }
 
 // <term> ::= <factor> { ("*" | "/") <factor> }
 fn parse_term(tokens: &mut Vec<Token>) -> Node<String> {
-  parse_exp(
-    tokens,
-    vec![
-      TokenType::Multiplication,
-      TokenType::Division,
-      TokenType::Modulo,
-    ],
-    parse_factor,
-  )
-}
-
-fn parse_exp<F: Fn(&mut Vec<Token>) -> Node<String>>(
-  tokens: &mut Vec<Token>,
-  t_types: Vec<TokenType>,
-  f: F,
-) -> Node<String> {
-  let error_message = "Unexpected termination of tokens";
-  let mut exp = f(tokens);
-  let next = tokens.get(0).expect(error_message);
-  let mut next_type = next.get_type().clone();
-  while t_types.contains(&next_type) {
-    let op = tokens.remove(0);
-    let next_exp = f(tokens);
-    let mut bin_op = Node::new(NodeType::BinaryOp);
-    bin_op.add_data(op.get_value());
-    bin_op.add_child(exp);
-    bin_op.add_child(next_exp);
-    exp = bin_op;
-    next_type = tokens.get(0).expect(error_message).get_type().clone();
+  let mut factor = parse_factor(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_mul_or_div() {
+    let op_token = get_next_token(tokens);
+    let next_factor = parse_factor(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![factor, next_factor]);
+    factor = binary_op;
+    next = peek_next_token(tokens);
   }
-  exp
+  factor
 }
 
 // <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
 fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
-  let token = tokens.remove(0);
-  match token.get_type() {
+  let next = peek_next_token(tokens);
+  let expression = match next.get_type() {
     TokenType::OParen => {
-      let mut exp = parse_expression(tokens);
-      exp.add_data(token.get_type().to_string());
-      let token = tokens.remove(0);
-      if token.get_type() != &TokenType::CParen {
-        panic!("Open paren does not have matching close paren");
-      }
-      exp.add_data(token.get_type().to_string());
-      exp
+      get_next_token(tokens);
+      let expression = parse_logical_or_expression(tokens);
+      let token = get_next_token(tokens);
+      check_type(&TokenType::CParen, &token);
+      expression
     }
-    TokenType::Integer => {
-      let mut int_node = Node::new(NodeType::Integer);
-      int_node.add_data(token.get_value());
-      int_node
+    TokenType::Integer => parse_integer(tokens),
+    TokenType::BitwiseComplement | TokenType::LogicalNegation | TokenType::Negation => {
+      parse_unary_op(tokens)
     }
-    TokenType::BitwiseComplement | TokenType::Negation | TokenType::LogicalNegation => {
-      let mut op_node = Node::new(NodeType::UnaryOp);
-      op_node.add_data(token.get_type().to_string());
-      let factor = parse_factor(tokens);
-      op_node.add_child(factor);
-      op_node
+    _ => panic!("Unexpected token: {:?}", next.get_type()),
+  };
+  expression
+}
+
+// <unary_op> ::= "!" | "~" | "-"
+fn parse_unary_op(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut node = Node::new(NodeType::UnaryOp);
+  let operator_token = get_next_token(tokens);
+  node.add_data(operator_token.get_value());
+  let expression = parse_logical_or_expression(tokens);
+  node.add_child(expression);
+  node
+}
+
+// <exp> ::= <int>
+fn parse_integer(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::Integer);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::Integer, &token);
+  n.add_data(token.get_value());
+  n
+}
+
+fn check_type(expected: &TokenType, actual: &Token) {
+  if expected != actual.get_type() {
+    panic!(
+      "Expected {:?} token but got {:?} token",
+      expected,
+      actual.get_type()
+    );
+  }
+}
+
+fn get_next_token(tokens: &mut Vec<Token>) -> Token {
+  tokens.remove(0)
+}
+
+fn peek_next_token(tokens: &mut Vec<Token>) -> &Token {
+  tokens.get(0).expect("Unexpected end of input")
+}
+
+pub struct Tree {
+  nodes: Vec<Node<String>>,
+}
+
+impl Tree {
+  fn new() -> Tree {
+    Tree { nodes: vec![] }
+  }
+
+  fn add_node(&mut self, node: Node<String>) {
+    self.nodes.push(node);
+  }
+
+  pub fn generate_asm(&mut self, out_vec: &mut Vec<String>) {
+    for node in self.nodes.iter_mut() {
+      node.generate_asm(out_vec);
     }
-    _ => panic!("{}: {}", UNEXPECTED_ERROR, token.get_type()),
+  }
+}
+
+impl fmt::Display for Tree {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "nodes: {}", self.nodes[0])
   }
 }
