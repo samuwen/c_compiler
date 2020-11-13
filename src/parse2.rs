@@ -68,11 +68,59 @@ fn parse_logical_or_expression(tokens: &mut Vec<Token>) -> Node<String> {
   and_exp
 }
 
-// <logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
+// <logical-and-exp> ::= <bitwise-or-exp> { "&&" <bitwise-or-exp> }
 fn parse_logical_and_expression(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut equality_exp = parse_equality_expression(tokens);
+  let mut bitwise_or = parse_bitwise_or_expression(tokens);
   let mut next = peek_next_token(tokens);
   while next.is_logical_and() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_bitwise_or_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![bitwise_or, next_term]);
+    bitwise_or = binary_op;
+    next = peek_next_token(tokens);
+  }
+  bitwise_or
+}
+
+// <bitwise-or-exp> ::= <bitwise-xor-exp> { "&&" <bitwise-xor-exp> }
+fn parse_bitwise_or_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut bitwise_xor_exp = parse_bitwise_xor_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_bitwise_or() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_bitwise_xor_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![bitwise_xor_exp, next_term]);
+    bitwise_xor_exp = binary_op;
+    next = peek_next_token(tokens);
+  }
+  bitwise_xor_exp
+}
+
+// <bitwise-xor-exp> ::= <bitwise-and-exp> { "&&" <bitwise-and-exp> }
+fn parse_bitwise_xor_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut bitwise_and_exp = parse_bitwise_and_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_bitwise_xor() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_bitwise_and_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![bitwise_and_exp, next_term]);
+    bitwise_and_exp = binary_op;
+    next = peek_next_token(tokens);
+  }
+  bitwise_and_exp
+}
+
+// <bitwise-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
+fn parse_bitwise_and_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut equality_exp = parse_equality_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_bitwise_and() {
     let op_token = get_next_token(tokens);
     let next_term = parse_equality_expression(tokens);
     let mut binary_op = Node::new(NodeType::BinaryOp);
@@ -100,13 +148,13 @@ fn parse_equality_expression(tokens: &mut Vec<Token>) -> Node<String> {
   term
 }
 
-// <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
+// <relational-exp> ::= <shift-exp> { ("<" | ">" | "<=" | ">=") <shift-exp> }
 fn parse_relational_expression(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut term = parse_additive_expression(tokens);
+  let mut term = parse_shift_expression(tokens);
   let mut next = peek_next_token(tokens);
   while next.is_relational() {
     let op_token = get_next_token(tokens);
-    let next_term = parse_additive_expression(tokens);
+    let next_term = parse_shift_expression(tokens);
     let mut binary_op = Node::new(NodeType::BinaryOp);
     binary_op.add_data(op_token.get_value());
     binary_op.add_children(vec![term, next_term]);
@@ -114,6 +162,22 @@ fn parse_relational_expression(tokens: &mut Vec<Token>) -> Node<String> {
     next = peek_next_token(tokens);
   }
   term
+}
+
+// <shift-exp> ::= <additive-exp> { ("<<" | ">>") <additive-exp> }
+fn parse_shift_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut additive_exp = parse_additive_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_shift() {
+    let op_token = get_next_token(tokens);
+    let next_term = parse_additive_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![additive_exp, next_term]);
+    additive_exp = binary_op;
+    next = peek_next_token(tokens);
+  }
+  additive_exp
 }
 
 // <additive-exp> ::= <term> { ("+" | "-") <term> }

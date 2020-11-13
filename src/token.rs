@@ -41,7 +41,7 @@ impl Token {
 
   pub fn is_mul_or_div(&self) -> bool {
     match self.get_type() {
-      TokenType::Multiplication | TokenType::Division => true,
+      TokenType::Multiplication | TokenType::Division | TokenType::Modulo => true,
       _ => false,
     }
   }
@@ -73,6 +73,34 @@ impl Token {
       | TokenType::LessThanOrEqual
       | TokenType::GreaterThan
       | TokenType::GreaterThanOrEqual => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_bitwise_or(&self) -> bool {
+    match self.get_type() {
+      TokenType::BitwiseOr => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_bitwise_xor(&self) -> bool {
+    match self.get_type() {
+      TokenType::BitwiseXor => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_bitwise_and(&self) -> bool {
+    match self.get_type() {
+      TokenType::BitwiseAnd => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_shift(&self) -> bool {
+    match self.get_type() {
+      TokenType::BitwiseShl | TokenType::BitwiseShr => true,
       _ => false,
     }
   }

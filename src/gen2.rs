@@ -129,10 +129,7 @@ impl Node<String> {
         out_vec.push(format!("{}movl\t%ecx, %eax", sep));
       }
       "/" => {
-        self.generate_child_asm(child2, out_vec);
-        out_vec.push(format!("{}push\t%eax", sep));
-        self.generate_child_asm(child1, out_vec);
-        out_vec.push(format!("{}pop\t%ecx", sep));
+        self.generate_reverse_op_setup(child1, child2, out_vec);
         out_vec.push(format!("{}cdq", sep));
         out_vec.push(format!("{}idivl\t%ecx", sep));
       }
@@ -189,6 +186,32 @@ impl Node<String> {
         out_vec.push(format!("{}setne\t%al", sep));
         out_vec.push(format!("{}:", label2));
       }
+      "%" => {
+        self.generate_reverse_op_setup(child1, child2, out_vec);
+        out_vec.push(format!("\tcdq"));
+        out_vec.push(format!("\tidivl\t%ecx"));
+        out_vec.push(format!("\tmovl\t%edx, %eax"));
+      }
+      "&" => {
+        self.generate_standard_op_setup(child1, child2, out_vec);
+        out_vec.push(format!("\tand\t%ecx, %eax"));
+      }
+      "|" => {
+        self.generate_standard_op_setup(child1, child2, out_vec);
+        out_vec.push(format!("\tor\t%ecx, %eax"));
+      }
+      "^" => {
+        self.generate_standard_op_setup(child1, child2, out_vec);
+        out_vec.push(format!("\txor\t%ecx, %eax"));
+      }
+      "<<" => {
+        self.generate_reverse_op_setup(child1, child2, out_vec);
+        out_vec.push(format!("\tsall\t%cl, %eax"));
+      }
+      ">>" => {
+        self.generate_reverse_op_setup(child1, child2, out_vec);
+        out_vec.push(format!("\tsarl\t%cl, %eax"));
+      }
       _ => panic!("Unexpected operation: {}", operator),
     }
   }
@@ -202,6 +225,7 @@ impl Node<String> {
     match child.get_type() {
       NodeType::Integer => child.generate_integer_asm(out_vec),
       NodeType::BinaryOp => child.generate_binary_op_asm(out_vec),
+      NodeType::UnaryOp => child.generate_unary_op_asm(out_vec),
       _ => panic!("Unexpected node type: {:?}", child.get_type()),
     };
   }
@@ -216,6 +240,19 @@ impl Node<String> {
     self.generate_child_asm(c1, out_vec);
     out_vec.push(format!("{}push\t%eax", sep));
     self.generate_child_asm(c2, out_vec);
+    out_vec.push(format!("{}pop\t%ecx", sep));
+  }
+
+  fn generate_reverse_op_setup(
+    &self,
+    c1: Node<String>,
+    c2: Node<String>,
+    out_vec: &mut Vec<String>,
+  ) {
+    let sep = get_separator();
+    self.generate_child_asm(c2, out_vec);
+    out_vec.push(format!("{}push\t%eax", sep));
+    self.generate_child_asm(c1, out_vec);
     out_vec.push(format!("{}pop\t%ecx", sep));
   }
 

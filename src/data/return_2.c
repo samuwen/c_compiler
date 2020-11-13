@@ -1,4 +1,4 @@
 int main()
 {
-  return 0 && 2 || 0;
+  return 28 ^ 38;
 }
