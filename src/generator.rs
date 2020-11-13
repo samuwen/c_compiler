@@ -1,13 +1,15 @@
 use crate::Tree;
+use log::*;
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::vec::Vec;
 
 static WS_COUNT: AtomicUsize = AtomicUsize::new(0);
-static COUNT: AtomicUsize = AtomicUsize::new(0);
+static LB_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 fn get_next_label() -> String {
-  format!("label{}", COUNT.fetch_add(1, Ordering::Relaxed))
+  format!("label{}", LB_COUNT.fetch_add(1, Ordering::Relaxed))
 }
 
 fn get_separator() -> String {
@@ -51,6 +53,10 @@ impl Node<String> {
     self.children.append(&mut children);
   }
 
+  pub fn get_first_data(mut self) -> String {
+    self.data.remove(0)
+  }
+
   fn get_type(&self) -> &NodeType {
     &self._type
   }
@@ -66,25 +72,61 @@ impl Node<String> {
   }
 
   pub fn generate_function_asm(&mut self, out_vec: &mut Vec<String>) {
+    let mut map: HashMap<String, String> = HashMap::new();
+    let mut stack_index: isize = 0;
     let name = self.data.get(0).unwrap();
     out_vec.push(format!(".globl {}", name));
     out_vec.push(format!("{}:", name));
     WS_COUNT.fetch_add(1, Ordering::Relaxed);
+    let sep = get_separator();
+    out_vec.push(format!("{}push\t%ebp", sep));
+    out_vec.push(format!("{}movl\t%esp, %ebp", sep));
     for statement in self.children.iter_mut() {
-      statement.generate_statement_asm(out_vec);
+      statement.generate_statement_asm(out_vec, &mut map, &mut stack_index);
+    }
+    out_vec.push(format!("{}movl\t%ebp, %esp", sep));
+    out_vec.push(format!("{}pop\t%ebp", sep));
+    out_vec.push(format!("{}ret", get_separator()));
+  }
+
+  fn generate_statement_asm(
+    &mut self,
+    out_vec: &mut Vec<String>,
+    var_map: &mut HashMap<String, String>,
+    stack_index: &mut isize,
+  ) {
+    match self.get_type() {
+      NodeType::ReturnStatement => {
+        self.handle_statement_children(out_vec);
+      }
+      NodeType::ExpressionStatement => {
+        self.handle_statement_children(out_vec);
+      }
+      NodeType::DeclareStatement => {
+        let var_name = self.data.remove(0);
+        if var_map.contains_key(&var_name) {
+          panic!("Cannot declare variable {} twice", var_name);
+        }
+        self.handle_statement_children(out_vec);
+        out_vec.push(format!("{}pushl\t%eax", get_separator()));
+        var_map.insert(var_name, String::from("0"));
+        *stack_index -= 4;
+      }
+      _ => panic!("Unexpected node type: {:?}", self.get_type()),
     }
   }
 
-  pub fn generate_statement_asm(&mut self, out_vec: &mut Vec<String>) {
+  fn handle_statement_children(&mut self, out_vec: &mut Vec<String>) {
     for child in self.children.iter_mut() {
       match child.get_type() {
         NodeType::Integer => child.generate_integer_asm(out_vec),
         NodeType::UnaryOp => child.generate_unary_op_asm(out_vec),
         NodeType::BinaryOp => child.generate_binary_op_asm(out_vec),
+        NodeType::Assignment => child.generate_assignment_asm(out_vec),
+        NodeType::Variable => child.generate_variable_asm(out_vec),
         _ => panic!("Unexpected node type: {:?}", child.get_type()),
       }
     }
-    out_vec.push(format!("{}ret", get_separator()));
   }
 
   fn generate_unary_op_asm(&mut self, out_vec: &mut Vec<String>) {
@@ -109,7 +151,7 @@ impl Node<String> {
     }
   }
 
-  pub fn generate_binary_op_asm(&mut self, out_vec: &mut Vec<String>) {
+  fn generate_binary_op_asm(&mut self, out_vec: &mut Vec<String>) {
     let sep = get_separator();
     let child1 = self.children.remove(0);
     let child2 = self.children.remove(0);
@@ -216,12 +258,20 @@ impl Node<String> {
     }
   }
 
-  pub fn generate_integer_asm(&mut self, out_vec: &mut Vec<String>) {
+  fn generate_integer_asm(&mut self, out_vec: &mut Vec<String>) {
     let sep = get_separator();
     out_vec.push(format!("{}movl\t${}, %eax", sep, self.data.get(0).unwrap()));
   }
 
-  pub fn generate_child_asm(&self, mut child: Node<String>, out_vec: &mut Vec<String>) {
+  fn generate_assignment_asm(&mut self, out_vec: &mut Vec<String>) {
+    warn!("Assignment assembly NYI");
+  }
+
+  fn generate_variable_asm(&mut self, out_vec: &mut Vec<String>) {
+    warn!("Variable assembly NYI");
+  }
+
+  fn generate_child_asm(&self, mut child: Node<String>, out_vec: &mut Vec<String>) {
     match child.get_type() {
       NodeType::Integer => child.generate_integer_asm(out_vec),
       NodeType::BinaryOp => child.generate_binary_op_asm(out_vec),
@@ -296,8 +346,12 @@ impl fmt::Display for Node<String> {
 pub enum NodeType {
   Program,
   Function,
-  Statement,
+  ReturnStatement,
+  DeclareStatement,
+  ExpressionStatement,
   Integer,
   UnaryOp,
   BinaryOp,
+  Variable,
+  Assignment,
 }

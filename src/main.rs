@@ -33,11 +33,12 @@ fn main() {
     .output()
     .expect("GCC failed to run");
   if output.status.success() {
+    debug!("File successfully linked");
     let delete_result = Command::new("rm")
       .arg(ASSEMBLY_FILE_NAME)
       .output()
       .expect("Failed to delete file");
-    debug!("delete: {}", delete_result.status);
+    trace!("delete: {}", delete_result.status);
   } else {
     panic!("GCC failed to compile");
   }

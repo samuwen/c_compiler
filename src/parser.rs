@@ -15,7 +15,7 @@ fn parse_program(tokens: &mut Vec<Token>) -> Node<String> {
   n
 }
 
-// <function> ::= "int" <id> "(" ")" "{" <statement> "}"
+// <function> ::= "int" <id> "(" ")" "{" { <statement> } "}"
 fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   let mut n = Node::new(NodeType::Function);
   let token = get_next_token(tokens);
@@ -32,7 +32,12 @@ fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   check_type(&TokenType::OBrace, &token);
   let mut next = peek_next_token(tokens);
   while next.get_type() != &TokenType::CBrace {
-    let statement = parse_statement(tokens);
+    // <statement> ::= "return" <exp> ";" | <exp> ";" | "int" <id> [ = <exp>] ";"
+    let statement = match next.get_type() {
+      TokenType::ReturnKeyword => parse_return_statement(tokens),
+      TokenType::IntKeyword => parse_declare_statement(tokens),
+      _ => parse_expression_statement(tokens),
+    };
     n.add_child(statement);
     next = peek_next_token(tokens);
   }
@@ -42,8 +47,8 @@ fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
 }
 
 // <statement> ::= "return" <exp> ";"
-fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::Statement);
+fn parse_return_statement(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::ReturnStatement);
   let token = get_next_token(tokens);
   check_type(&TokenType::ReturnKeyword, &token);
   n.add_child(parse_logical_or_expression(tokens));
@@ -52,16 +57,65 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
   n
 }
 
+// <statement> ::= "int" <id> [ = <exp>] ";"
+fn parse_declare_statement(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::DeclareStatement);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::IntKeyword, &token);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::Identifier, &token);
+  n.add_data(token.get_value());
+  let token = get_next_token(tokens);
+  match token.get_type() {
+    TokenType::Semicolon => (),
+    TokenType::Assignment => {
+      n.add_child(parse_logical_or_expression(tokens));
+      let token = get_next_token(tokens);
+      check_type(&TokenType::Semicolon, &token);
+    }
+    _ => panic!(
+      "Expected Semicolon or Assignment, got {:?}",
+      token.get_type()
+    ),
+  }
+  n
+}
+
+// <statement> ::= <exp> ";"
+fn parse_expression_statement(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::ExpressionStatement);
+  n.add_child(parse_assignment_expression(tokens));
+  let token = get_next_token(tokens);
+  check_type(&TokenType::Semicolon, &token);
+  n
+}
+
+// <exp> ::= <logical-or-exp> { "=" <logical-or-exp> }
+fn parse_assignment_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut or_exp = parse_logical_or_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_assignment() {
+    get_next_token(tokens); // dispose of assignment op
+    let next_or_exp = parse_logical_or_expression(tokens);
+    let mut assignment = Node::new(NodeType::Assignment);
+    assignment.add_data(or_exp.get_first_data());
+    assignment.add_children(vec![next_or_exp]);
+    or_exp = assignment;
+    next = peek_next_token(tokens);
+  }
+  or_exp
+}
+
 // <exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
 fn parse_logical_or_expression(tokens: &mut Vec<Token>) -> Node<String> {
   let mut and_exp = parse_logical_and_expression(tokens);
   let mut next = peek_next_token(tokens);
   while next.is_logical_or() {
     let op_token = get_next_token(tokens);
-    let next_term = parse_logical_and_expression(tokens);
+    let next_and_exp = parse_logical_and_expression(tokens);
     let mut binary_op = Node::new(NodeType::BinaryOp);
     binary_op.add_data(op_token.get_value());
-    binary_op.add_children(vec![and_exp, next_term]);
+    binary_op.add_children(vec![and_exp, next_and_exp]);
     and_exp = binary_op;
     next = peek_next_token(tokens);
   }
@@ -212,7 +266,7 @@ fn parse_term(tokens: &mut Vec<Token>) -> Node<String> {
   factor
 }
 
-// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
+// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
 fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
   let next = peek_next_token(tokens);
   let expression = match next.get_type() {
@@ -223,10 +277,11 @@ fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
       check_type(&TokenType::CParen, &token);
       expression
     }
-    TokenType::Integer => parse_integer(tokens),
     TokenType::BitwiseComplement | TokenType::LogicalNegation | TokenType::Negation => {
       parse_unary_op(tokens)
     }
+    TokenType::Integer => parse_integer(tokens),
+    TokenType::Identifier => parse_variable(tokens),
     _ => panic!("Unexpected token: {:?}", next.get_type()),
   };
   expression
@@ -247,6 +302,14 @@ fn parse_integer(tokens: &mut Vec<Token>) -> Node<String> {
   let mut n = Node::new(NodeType::Integer);
   let token = get_next_token(tokens);
   check_type(&TokenType::Integer, &token);
+  n.add_data(token.get_value());
+  n
+}
+
+fn parse_variable(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::Variable);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::Identifier, &token);
   n.add_data(token.get_value());
   n
 }

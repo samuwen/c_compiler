@@ -104,6 +104,13 @@ impl Token {
       _ => false,
     }
   }
+
+  pub fn is_assignment(&self) -> bool {
+    match self.get_type() {
+      TokenType::Assignment => true,
+      _ => false,
+    }
+  }
 }
 
 impl PartialOrd for Token {
