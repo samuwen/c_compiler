@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Token {
   value: String,
   token_type: TokenType,
@@ -107,8 +107,34 @@ impl Token {
 
   pub fn is_assignment(&self) -> bool {
     match self.get_type() {
-      TokenType::Assignment => true,
+      TokenType::Assignment
+      | TokenType::AddAssign
+      | TokenType::MulAssign
+      | TokenType::DivAssign
+      | TokenType::SubAssign => true,
       _ => false,
+    }
+  }
+
+  pub fn is_combo_assignment(&self) -> bool {
+    match self.get_type() {
+      TokenType::AddAssign | TokenType::MulAssign | TokenType::SubAssign | TokenType::DivAssign => {
+        true
+      }
+      _ => false,
+    }
+  }
+
+  pub fn get_combo_assignment_op(&self) -> TokenType {
+    match self.get_type() {
+      TokenType::AddAssign => TokenType::Addition,
+      TokenType::MulAssign => TokenType::Multiplication,
+      TokenType::SubAssign => TokenType::Negation,
+      TokenType::DivAssign => TokenType::Division,
+      _ => panic!(
+        "Expected combo assignment operator. Got {}",
+        self.get_type()
+      ),
     }
   }
 }
@@ -165,6 +191,10 @@ pub enum TokenType {
   BitwiseShl,
   BitwiseShr,
   Assignment,
+  AddAssign,
+  MulAssign,
+  SubAssign,
+  DivAssign,
 }
 
 impl TokenType {
@@ -200,6 +230,10 @@ impl TokenType {
       TokenType::BitwiseShl => "<<",
       TokenType::BitwiseShr => ">>",
       TokenType::Assignment => "=",
+      TokenType::AddAssign => "+=",
+      TokenType::MulAssign => "*=",
+      TokenType::SubAssign => "-=",
+      TokenType::DivAssign => "/=",
     })
   }
 }

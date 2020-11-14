@@ -16,9 +16,9 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "-", TokenType::Negation));
   total.append(&mut find_tokens(&f, "~", TokenType::BitwiseComplement));
   total.append(&mut find_tokens(&f, "!", TokenType::LogicalNegation));
-  total.append(&mut find_tokens(&f, "\\+", TokenType::Addition));
-  total.append(&mut find_tokens(&f, "\\*", TokenType::Multiplication));
-  total.append(&mut find_tokens(&f, "/", TokenType::Division));
+  total.append(&mut find_tokens(&f, "\\s\\+\\s", TokenType::Addition));
+  total.append(&mut find_tokens(&f, "\\s\\*\\s", TokenType::Multiplication));
+  total.append(&mut find_tokens(&f, "\\s/\\s", TokenType::Division));
   total.append(&mut find_tokens(&f, "&&", TokenType::And));
   total.append(&mut find_tokens(&f, "\\|\\|", TokenType::Or));
   total.append(&mut find_tokens(&f, "==", TokenType::Equal));
@@ -34,9 +34,14 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "<<", TokenType::BitwiseShl));
   total.append(&mut find_tokens(&f, ">>", TokenType::BitwiseShr));
   total.append(&mut find_tokens(&f, "\\s=\\s", TokenType::Assignment));
+  total.append(&mut find_tokens(&f, "\\s\\+=\\s", TokenType::AddAssign));
+  total.append(&mut find_tokens(&f, "\\s-=\\s", TokenType::SubAssign));
+  total.append(&mut find_tokens(&f, "\\s\\*=\\s", TokenType::MulAssign));
+  total.append(&mut find_tokens(&f, "\\s/=\\s", TokenType::DivAssign));
   total.sort();
   total.dedup();
   total = remove_extra_logical_negation_tokens(total);
+  total = remove_extra_negation_tokens(total);
   debug!("{:?}", total);
   total
 }
@@ -67,6 +72,28 @@ fn remove_extra_logical_negation_tokens(mut total: Vec<Token>) -> Vec<Token> {
     if removed.get_type() != &TokenType::LogicalNegation {
       panic!(
         "Removed incorrect token after NotEqual expression: {}",
+        removed.get_type()
+      );
+    }
+  }
+  total
+}
+
+// gross hack because regex library does not support lookahead
+fn remove_extra_negation_tokens(mut total: Vec<Token>) -> Vec<Token> {
+  let ne_count = total
+    .iter()
+    .filter(|tok| tok.get_type() == &TokenType::SubAssign)
+    .count();
+  for _ in 0..ne_count {
+    let pos = total
+      .iter()
+      .position(|tok| tok.get_type() == &TokenType::SubAssign)
+      .unwrap();
+    let removed = total.remove(pos + 1);
+    if removed.get_type() != &TokenType::Negation {
+      panic!(
+        "Removed incorrect token after SubAssign expression: {}",
         removed.get_type()
       );
     }

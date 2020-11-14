@@ -78,7 +78,7 @@ impl Node<String> {
     out_vec.push(format!("{}:", name));
     WS_COUNT.fetch_add(1, Ordering::Relaxed);
     let sep = get_separator();
-    out_vec.push(format!("{}push\t%ebp", sep));
+    out_vec.push(format!("{}pushl\t%ebp", sep));
     out_vec.push(format!("{}movl\t%esp, %ebp", sep));
     let has_return = self
       .children
@@ -143,7 +143,7 @@ impl Node<String> {
         NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map, stack_index),
         NodeType::BinaryOp => child.generate_binary_op_asm(out_vec, var_map, stack_index),
         NodeType::Assignment => child.generate_assignment_asm(out_vec, var_map, stack_index),
-        NodeType::Variable => child.generate_variable_asm(out_vec, var_map, stack_index),
+        NodeType::Variable => child.generate_variable_asm(out_vec, var_map),
         _ => panic!("Unexpected node type: {:?}", child.get_type()),
       }
     }
@@ -305,7 +305,7 @@ impl Node<String> {
         NodeType::BinaryOp => child.generate_binary_op_asm(out_vec, var_map, stack_index),
         NodeType::Integer => child.generate_integer_asm(out_vec),
         NodeType::Assignment => child.generate_assignment_asm(out_vec, var_map, stack_index),
-        NodeType::Variable => child.generate_variable_asm(out_vec, var_map, stack_index),
+        NodeType::Variable => child.generate_variable_asm(out_vec, var_map),
         _ => panic!("Unexpected node type: {:?}", child.get_type()),
       };
       let offset = var_map
@@ -319,7 +319,6 @@ impl Node<String> {
     &mut self,
     out_vec: &mut Vec<String>,
     var_map: &mut HashMap<String, isize>,
-    stack_index: &mut isize,
   ) {
     let var_name = self.data.remove(0);
     let offset = var_map
@@ -339,7 +338,7 @@ impl Node<String> {
       NodeType::Integer => child.generate_integer_asm(out_vec),
       NodeType::BinaryOp => child.generate_binary_op_asm(out_vec, var_map, stack_index),
       NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map, stack_index),
-      NodeType::Variable => child.generate_variable_asm(out_vec, var_map, stack_index),
+      NodeType::Variable => child.generate_variable_asm(out_vec, var_map),
       _ => panic!("Unexpected node type: {:?}", child.get_type()),
     };
   }
@@ -354,7 +353,7 @@ impl Node<String> {
   ) {
     let sep = get_separator();
     self.generate_child_asm(c1, out_vec, var_map, stack_index);
-    out_vec.push(format!("{}push\t%eax", sep));
+    out_vec.push(format!("{}pushl\t%eax", sep));
     self.generate_child_asm(c2, out_vec, var_map, stack_index);
     out_vec.push(format!("{}pop\t%ecx", sep));
   }
@@ -369,7 +368,7 @@ impl Node<String> {
   ) {
     let sep = get_separator();
     self.generate_child_asm(c2, out_vec, var_map, stack_index);
-    out_vec.push(format!("{}push\t%eax", sep));
+    out_vec.push(format!("{}pushl\t%eax", sep));
     self.generate_child_asm(c1, out_vec, var_map, stack_index);
     out_vec.push(format!("{}pop\t%ecx", sep));
   }

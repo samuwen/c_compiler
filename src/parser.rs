@@ -95,11 +95,19 @@ fn parse_assignment_expression(tokens: &mut Vec<Token>) -> Node<String> {
   let mut or_exp = parse_logical_or_expression(tokens);
   let mut next = peek_next_token(tokens);
   while next.is_assignment() {
-    get_next_token(tokens); // dispose of assignment op
+    let op_token = get_next_token(tokens);
     let next_exp = parse_assignment_expression(tokens);
     let mut assignment = Node::new(NodeType::Assignment);
     assignment.add_data(or_exp.get_data().get(0).expect("No data found").to_owned());
-    assignment.add_children(vec![or_exp, next_exp]);
+    if op_token.is_combo_assignment() {
+      let op = op_token.get_combo_assignment_op();
+      let mut binary_op = Node::new(NodeType::BinaryOp);
+      binary_op.add_data(op.to_string());
+      binary_op.add_children(vec![or_exp, next_exp]);
+      assignment.add_child(binary_op);
+    } else {
+      assignment.add_children(vec![or_exp, next_exp]);
+    }
     or_exp = assignment;
     next = peek_next_token(tokens);
   }
@@ -328,8 +336,8 @@ fn get_next_token(tokens: &mut Vec<Token>) -> Token {
   tokens.remove(0)
 }
 
-fn peek_next_token(tokens: &mut Vec<Token>) -> &Token {
-  tokens.get(0).expect("Unexpected end of input")
+fn peek_next_token(tokens: &mut Vec<Token>) -> Token {
+  tokens.get(0).expect("Unexpected end of input").clone()
 }
 
 pub struct Tree {
