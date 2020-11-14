@@ -69,7 +69,7 @@ fn parse_declare_statement(tokens: &mut Vec<Token>) -> Node<String> {
   match token.get_type() {
     TokenType::Semicolon => (),
     TokenType::Assignment => {
-      n.add_child(parse_logical_or_expression(tokens));
+      n.add_child(parse_assignment_expression(tokens));
       let token = get_next_token(tokens);
       check_type(&TokenType::Semicolon, &token);
     }
@@ -96,10 +96,10 @@ fn parse_assignment_expression(tokens: &mut Vec<Token>) -> Node<String> {
   let mut next = peek_next_token(tokens);
   while next.is_assignment() {
     get_next_token(tokens); // dispose of assignment op
-    let next_or_exp = parse_logical_or_expression(tokens);
+    let next_exp = parse_assignment_expression(tokens);
     let mut assignment = Node::new(NodeType::Assignment);
-    assignment.add_data(or_exp.get_first_data());
-    assignment.add_children(vec![next_or_exp]);
+    assignment.add_data(or_exp.get_data().get(0).expect("No data found").to_owned());
+    assignment.add_children(vec![or_exp, next_exp]);
     or_exp = assignment;
     next = peek_next_token(tokens);
   }
