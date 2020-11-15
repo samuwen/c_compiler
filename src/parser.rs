@@ -96,20 +96,33 @@ fn parse_assignment_expression(tokens: &mut Vec<Token>) -> Node<String> {
   let mut next = peek_next_token(tokens);
   while next.is_assignment() || next.is_combo_assignment() {
     let op_token = get_next_token(tokens);
-    let next_exp = parse_assignment_expression(tokens);
-    let mut assignment = Node::new(NodeType::Assignment);
-    assignment.add_data(or_exp.get_data().get(0).expect("No data found").to_owned());
-    if op_token.is_combo_assignment() {
-      let op = op_token.get_combo_assignment_op();
-      let mut binary_op = Node::new(NodeType::BinaryOp);
-      binary_op.add_data(op.to_string());
-      binary_op.add_children(vec![or_exp, next_exp]);
-      assignment.add_child(binary_op);
-    } else {
-      assignment.add_children(vec![or_exp, next_exp]);
+    match op_token.is_postfix() {
+      true => {
+        let mut assignment = Node::new(NodeType::Assignment);
+        assignment.add_data(or_exp.get_data().get(0).expect("No data found").to_owned());
+        let mut unary_op = Node::new(NodeType::UnaryOp);
+        unary_op.add_data(op_token.get_type().to_string());
+        assignment.add_child(unary_op);
+        or_exp = assignment;
+        next = peek_next_token(tokens);
+      }
+      false => {
+        let next_exp = parse_assignment_expression(tokens);
+        let mut assignment = Node::new(NodeType::Assignment);
+        assignment.add_data(or_exp.get_data().get(0).expect("No data found").to_owned());
+        if op_token.is_combo_assignment() {
+          let op = op_token.get_combo_assignment_op();
+          let mut binary_op = Node::new(NodeType::BinaryOp);
+          binary_op.add_data(op.to_string());
+          binary_op.add_children(vec![or_exp, next_exp]);
+          assignment.add_child(binary_op);
+        } else {
+          assignment.add_children(vec![or_exp, next_exp]);
+        }
+        or_exp = assignment;
+        next = peek_next_token(tokens);
+      }
     }
-    or_exp = assignment;
-    next = peek_next_token(tokens);
   }
   or_exp
 }
@@ -285,9 +298,11 @@ fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
       check_type(&TokenType::CParen, &token);
       expression
     }
-    TokenType::BitwiseComplement | TokenType::LogicalNegation | TokenType::Negation => {
-      parse_unary_op(tokens)
-    }
+    TokenType::BitwiseComplement
+    | TokenType::LogicalNegation
+    | TokenType::Negation
+    | TokenType::PreDecrement
+    | TokenType::PreIncrement => parse_unary_op(tokens),
     TokenType::Integer => parse_integer(tokens),
     TokenType::Identifier => parse_variable(tokens),
     _ => panic!("Unexpected token: {:?}", next.get_type()),
@@ -295,7 +310,7 @@ fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
   expression
 }
 
-// <unary_op> ::= "!" | "~" | "-"
+// <unary_op> ::= "!" | "~" | "-" | "++" | "--"
 fn parse_unary_op(tokens: &mut Vec<Token>) -> Node<String> {
   let mut node = Node::new(NodeType::UnaryOp);
   let operator_token = get_next_token(tokens);

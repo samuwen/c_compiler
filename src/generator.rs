@@ -159,6 +159,7 @@ impl Node<String> {
       match child.get_type() {
         NodeType::Integer => child.generate_integer_asm(out_vec),
         NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map, stack_index),
+        NodeType::Variable => child.generate_variable_asm(out_vec, var_map),
         _ => panic!("Unexpected node type: {:?}", child.get_type()),
       }
     }
@@ -171,6 +172,16 @@ impl Node<String> {
         out_vec.push(format!("{}cmpl\t$0, %eax", sep));
         out_vec.push(format!("{}movl\t$0, %eax", sep));
         out_vec.push(format!("{}sete\t%al", sep));
+      }
+      "++" => {
+        out_vec.push(format!("{}movl\t$1, %ecx", sep));
+        out_vec.push(format!("{}addl\t%ecx, %eax", sep));
+      }
+      "--" => {
+        out_vec.push(format!("{}movl\t%eax, %ecx", sep));
+        out_vec.push(format!("{}movl\t$1, %eax", sep));
+        out_vec.push(format!("{}subl\t%eax, %ecx", sep));
+        out_vec.push(format!("{}movl\t%ecx, %eax", sep));
       }
       _ => panic!("Unexpected operation: {}", operator),
     }
@@ -306,6 +317,7 @@ impl Node<String> {
         NodeType::Integer => child.generate_integer_asm(out_vec),
         NodeType::Assignment => child.generate_assignment_asm(out_vec, var_map, stack_index),
         NodeType::Variable => child.generate_variable_asm(out_vec, var_map),
+        NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map, stack_index),
         _ => panic!("Unexpected node type: {:?}", child.get_type()),
       };
       let offset = var_map

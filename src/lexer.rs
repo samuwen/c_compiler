@@ -1,6 +1,5 @@
 use crate::{Token, TokenType};
 use log::*;
-// use regex::{Matches, Regex};
 use onig::{FindMatches, Regex};
 
 pub fn lex(f: String) -> Vec<Token> {
@@ -14,11 +13,15 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "return", TokenType::ReturnKeyword));
   total.append(&mut find_tokens(&f, "[a-zA-Z]\\w*", TokenType::Identifier));
   total.append(&mut find_tokens(&f, "[0-9]+", TokenType::Integer));
-  total.append(&mut find_tokens(&f, "-(?=[0-9]|\\s)", TokenType::Negation));
+  total.append(&mut find_tokens(
+    &f,
+    "(?<=\\s)-(?=[0-9|a-zA-Z]|\\s)",
+    TokenType::Negation,
+  ));
   total.append(&mut find_tokens(&f, "~", TokenType::BitwiseComplement));
   total.append(&mut find_tokens(
     &f,
-    "!(?=[0-9])",
+    "!(?=[0-9|a-zA-Z])",
     TokenType::LogicalNegation,
   ));
   total.append(&mut find_tokens(&f, "\\s\\+\\s", TokenType::Addition));
@@ -66,12 +69,12 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(
     &f,
     "--(?=[0-9|a-zA-Z])",
-    TokenType::PreIncrement,
+    TokenType::PreDecrement,
   ));
   total.append(&mut find_tokens(
     &f,
     "(?<=[0-9|a-zA-Z])--",
-    TokenType::PostIncrement,
+    TokenType::PostDecrement,
   ));
   total.sort();
   total.dedup();

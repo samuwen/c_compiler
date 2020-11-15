@@ -145,13 +145,20 @@ impl Token {
       TokenType::OrAssign => TokenType::BitwiseOr,
       TokenType::XorAssign => TokenType::BitwiseXor,
       TokenType::PreIncrement => TokenType::AddAssign,
-      TokenType::PostIncrement => TokenType::AddAssign,
+      TokenType::PostIncrement => TokenType::Addition,
       TokenType::PreDecrement => TokenType::SubAssign,
-      TokenType::PostDecrement => TokenType::SubAssign,
+      TokenType::PostDecrement => TokenType::Negation,
       _ => panic!(
         "Expected combo assignment operator. Got {}",
         self.get_type()
       ),
+    }
+  }
+
+  pub fn is_postfix(&self) -> bool {
+    match self.get_type() {
+      TokenType::PostIncrement | TokenType::PostDecrement => true,
+      _ => false,
     }
   }
 }
