@@ -124,8 +124,10 @@ impl Token {
       | TokenType::AndAssign
       | TokenType::OrAssign
       | TokenType::XorAssign
-      | TokenType::Increment
-      | TokenType::Decrement => true,
+      | TokenType::PreIncrement
+      | TokenType::PostIncrement
+      | TokenType::PreDecrement
+      | TokenType::PostDecrement => true,
       _ => false,
     }
   }
@@ -142,8 +144,10 @@ impl Token {
       TokenType::AndAssign => TokenType::BitwiseAnd,
       TokenType::OrAssign => TokenType::BitwiseOr,
       TokenType::XorAssign => TokenType::BitwiseXor,
-      TokenType::Increment => TokenType::AddAssign,
-      TokenType::Decrement => TokenType::SubAssign,
+      TokenType::PreIncrement => TokenType::AddAssign,
+      TokenType::PostIncrement => TokenType::AddAssign,
+      TokenType::PreDecrement => TokenType::SubAssign,
+      TokenType::PostDecrement => TokenType::SubAssign,
       _ => panic!(
         "Expected combo assignment operator. Got {}",
         self.get_type()
@@ -214,8 +218,10 @@ pub enum TokenType {
   AndAssign,
   OrAssign,
   XorAssign,
-  Increment,
-  Decrement,
+  PreIncrement,
+  PreDecrement,
+  PostIncrement,
+  PostDecrement,
 }
 
 impl TokenType {
@@ -261,8 +267,10 @@ impl TokenType {
       TokenType::AndAssign => "&=",
       TokenType::OrAssign => "|=",
       TokenType::XorAssign => "^=",
-      TokenType::Increment => "++",
-      TokenType::Decrement => "--",
+      TokenType::PreIncrement => "++",
+      TokenType::PreDecrement => "--",
+      TokenType::PostIncrement => "++",
+      TokenType::PostDecrement => "--",
     })
   }
 }

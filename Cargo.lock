@@ -73,7 +73,6 @@ dependencies = [
  "lazy_static",
  "log",
  "onig",
- "regex",
 ]
 
 [[package]]

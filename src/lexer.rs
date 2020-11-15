@@ -1,11 +1,12 @@
 use crate::{Token, TokenType};
 use log::*;
-use regex::{Matches, Regex};
+// use regex::{Matches, Regex};
+use onig::{FindMatches, Regex};
 
 pub fn lex(f: String) -> Vec<Token> {
   let mut total = Vec::with_capacity(f.len());
-  total.append(&mut find_tokens(&f, "\\{", TokenType::OBrace));
-  total.append(&mut find_tokens(&f, "\\}", TokenType::CBrace));
+  total.append(&mut find_tokens(&f, "{", TokenType::OBrace));
+  total.append(&mut find_tokens(&f, "}", TokenType::CBrace));
   total.append(&mut find_tokens(&f, "\\(", TokenType::OParen));
   total.append(&mut find_tokens(&f, "\\)", TokenType::CParen));
   total.append(&mut find_tokens(&f, ";", TokenType::Semicolon));
@@ -13,9 +14,13 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "return", TokenType::ReturnKeyword));
   total.append(&mut find_tokens(&f, "[a-zA-Z]\\w*", TokenType::Identifier));
   total.append(&mut find_tokens(&f, "[0-9]+", TokenType::Integer));
-  total.append(&mut find_tokens(&f, "-", TokenType::Negation));
+  total.append(&mut find_tokens(&f, "-(?=[0-9]|\\s)", TokenType::Negation));
   total.append(&mut find_tokens(&f, "~", TokenType::BitwiseComplement));
-  total.append(&mut find_tokens(&f, "!", TokenType::LogicalNegation));
+  total.append(&mut find_tokens(
+    &f,
+    "!(?=[0-9])",
+    TokenType::LogicalNegation,
+  ));
   total.append(&mut find_tokens(&f, "\\s\\+\\s", TokenType::Addition));
   total.append(&mut find_tokens(&f, "\\s\\*\\s", TokenType::Multiplication));
   total.append(&mut find_tokens(&f, "\\s/\\s", TokenType::Division));
@@ -48,67 +53,52 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "\\s&=\\s", TokenType::AndAssign));
   total.append(&mut find_tokens(&f, "\\s\\|=\\s", TokenType::OrAssign));
   total.append(&mut find_tokens(&f, "\\s\\^=\\s", TokenType::XorAssign));
-  total.append(&mut find_tokens(&f, "\\+\\+", TokenType::Increment));
-  total.append(&mut find_tokens(&f, "\\-\\-", TokenType::Decrement));
+  total.append(&mut find_tokens(
+    &f,
+    "\\+\\+(?=[0-9|a-zA-Z])",
+    TokenType::PreIncrement,
+  ));
+  total.append(&mut find_tokens(
+    &f,
+    "(?<=[0-9|a-zA-Z])\\+\\+",
+    TokenType::PostIncrement,
+  ));
+  total.append(&mut find_tokens(
+    &f,
+    "--(?=[0-9|a-zA-Z])",
+    TokenType::PreIncrement,
+  ));
+  total.append(&mut find_tokens(
+    &f,
+    "(?<=[0-9|a-zA-Z])--",
+    TokenType::PostIncrement,
+  ));
   total.sort();
   total.dedup();
-  total = remove_extra_logical_negation_tokens(total);
-  total = remove_extra_negation_tokens(total);
   debug!("{:?}", total);
   total
 }
 
 fn find_tokens(f: &String, value: &str, token_type: TokenType) -> Vec<Token> {
   let re = Regex::new(value).unwrap();
-  gen_tokens(re.find_iter(&f), &token_type)
+  let matches = re.find_iter(&f);
+  match token_type {
+    TokenType::Identifier | TokenType::Integer => gen_tokens(f, matches, &token_type),
+    _ => gen_tokens_no_val(matches, &token_type),
+  }
 }
 
-fn gen_tokens(matches: Matches, token_type: &TokenType) -> Vec<Token> {
+fn gen_tokens(f: &String, matches: FindMatches, token_type: &TokenType) -> Vec<Token> {
   matches
-    .map(|m| Token::new(m.as_str().trim(), token_type, m.start()))
+    .map(|m| {
+      let text: String = f.get(m.0..m.1).unwrap().chars().collect();
+      Token::new(&text, token_type, m.0)
+    })
     .collect()
 }
 
-// gross hack because regex library does not support lookahead
-fn remove_extra_logical_negation_tokens(mut total: Vec<Token>) -> Vec<Token> {
-  let ne_count = total
-    .iter()
-    .filter(|tok| tok.get_type() == &TokenType::NotEqual)
-    .count();
-  for _ in 0..ne_count {
-    let pos = total
-      .iter()
-      .position(|tok| tok.get_type() == &TokenType::NotEqual)
-      .unwrap();
-    let removed = total.remove(pos + 1);
-    if removed.get_type() != &TokenType::LogicalNegation {
-      panic!(
-        "Removed incorrect token after NotEqual expression: {}",
-        removed.get_type()
-      );
-    }
-  }
-  total
-}
-
-// gross hack because regex library does not support lookahead
-fn remove_extra_negation_tokens(mut total: Vec<Token>) -> Vec<Token> {
-  let ne_count = total
-    .iter()
-    .filter(|tok| tok.get_type() == &TokenType::SubAssign)
-    .count();
-  for _ in 0..ne_count {
-    let pos = total
-      .iter()
-      .position(|tok| tok.get_type() == &TokenType::SubAssign)
-      .unwrap();
-    let removed = total.remove(pos + 1);
-    if removed.get_type() != &TokenType::Negation {
-      panic!(
-        "Removed incorrect token after SubAssign expression: {}",
-        removed.get_type()
-      );
-    }
-  }
-  total
+fn gen_tokens_no_val(matches: FindMatches, token_type: &TokenType) -> Vec<Token> {
+  matches
+    .map(|m| Token::new(&token_type.to_string(), token_type, m.0))
+    .collect()
 }
