@@ -94,7 +94,7 @@ fn parse_expression_statement(tokens: &mut Vec<Token>) -> Node<String> {
 fn parse_assignment_expression(tokens: &mut Vec<Token>) -> Node<String> {
   let mut or_exp = parse_logical_or_expression(tokens);
   let mut next = peek_next_token(tokens);
-  while next.is_assignment() {
+  while next.is_assignment() || next.is_combo_assignment() {
     let op_token = get_next_token(tokens);
     let next_exp = parse_assignment_expression(tokens);
     let mut assignment = Node::new(NodeType::Assignment);

@@ -19,25 +19,37 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "\\s\\+\\s", TokenType::Addition));
   total.append(&mut find_tokens(&f, "\\s\\*\\s", TokenType::Multiplication));
   total.append(&mut find_tokens(&f, "\\s/\\s", TokenType::Division));
-  total.append(&mut find_tokens(&f, "&&", TokenType::And));
+  total.append(&mut find_tokens(&f, "\\s&&\\s", TokenType::And));
   total.append(&mut find_tokens(&f, "\\|\\|", TokenType::Or));
-  total.append(&mut find_tokens(&f, "==", TokenType::Equal));
+  total.append(&mut find_tokens(&f, "\\s==\\s", TokenType::Equal));
   total.append(&mut find_tokens(&f, "\\s!=\\s", TokenType::NotEqual));
   total.append(&mut find_tokens(&f, "\\s<\\s", TokenType::LessThan));
-  total.append(&mut find_tokens(&f, "<=", TokenType::LessThanOrEqual));
+  total.append(&mut find_tokens(&f, "\\s<=\\s", TokenType::LessThanOrEqual));
   total.append(&mut find_tokens(&f, "\\s>\\s", TokenType::GreaterThan));
-  total.append(&mut find_tokens(&f, ">=", TokenType::GreaterThanOrEqual));
-  total.append(&mut find_tokens(&f, "%", TokenType::Modulo));
+  total.append(&mut find_tokens(
+    &f,
+    "\\s>=\\s",
+    TokenType::GreaterThanOrEqual,
+  ));
+  total.append(&mut find_tokens(&f, "\\s%\\s", TokenType::Modulo));
   total.append(&mut find_tokens(&f, "\\s&\\s", TokenType::BitwiseAnd));
   total.append(&mut find_tokens(&f, "\\s\\|\\s", TokenType::BitwiseOr));
-  total.append(&mut find_tokens(&f, "\\^", TokenType::BitwiseXor));
-  total.append(&mut find_tokens(&f, "<<", TokenType::BitwiseShl));
-  total.append(&mut find_tokens(&f, ">>", TokenType::BitwiseShr));
+  total.append(&mut find_tokens(&f, "\\^\\s", TokenType::BitwiseXor));
+  total.append(&mut find_tokens(&f, "\\s<<\\s", TokenType::BitwiseShl));
+  total.append(&mut find_tokens(&f, "\\s>>\\s", TokenType::BitwiseShr));
   total.append(&mut find_tokens(&f, "\\s=\\s", TokenType::Assignment));
   total.append(&mut find_tokens(&f, "\\s\\+=\\s", TokenType::AddAssign));
   total.append(&mut find_tokens(&f, "\\s-=\\s", TokenType::SubAssign));
   total.append(&mut find_tokens(&f, "\\s\\*=\\s", TokenType::MulAssign));
   total.append(&mut find_tokens(&f, "\\s/=\\s", TokenType::DivAssign));
+  total.append(&mut find_tokens(&f, "\\s%=\\s", TokenType::ModAssign));
+  total.append(&mut find_tokens(&f, "\\s<<=\\s", TokenType::ShlAssign));
+  total.append(&mut find_tokens(&f, "\\s>>=\\s", TokenType::ShrAssign));
+  total.append(&mut find_tokens(&f, "\\s&=\\s", TokenType::AndAssign));
+  total.append(&mut find_tokens(&f, "\\s\\|=\\s", TokenType::OrAssign));
+  total.append(&mut find_tokens(&f, "\\s\\^=\\s", TokenType::XorAssign));
+  total.append(&mut find_tokens(&f, "\\+\\+", TokenType::Increment));
+  total.append(&mut find_tokens(&f, "\\-\\-", TokenType::Decrement));
   total.sort();
   total.dedup();
   total = remove_extra_logical_negation_tokens(total);
@@ -53,7 +65,7 @@ fn find_tokens(f: &String, value: &str, token_type: TokenType) -> Vec<Token> {
 
 fn gen_tokens(matches: Matches, token_type: &TokenType) -> Vec<Token> {
   matches
-    .map(|m| Token::new(m.as_str().trim(), token_type, m.start() as isize))
+    .map(|m| Token::new(m.as_str().trim(), token_type, m.start()))
     .collect()
 }
 

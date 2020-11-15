@@ -5,11 +5,11 @@ use std::fmt;
 pub struct Token {
   value: String,
   token_type: TokenType,
-  column: isize,
+  column: usize,
 }
 
 impl Token {
-  pub fn new(value: &str, typ: &TokenType, column: isize) -> Token {
+  pub fn new(value: &str, typ: &TokenType, column: usize) -> Token {
     Token {
       value: value.to_owned(),
       token_type: typ.clone(),
@@ -107,20 +107,25 @@ impl Token {
 
   pub fn is_assignment(&self) -> bool {
     match self.get_type() {
-      TokenType::Assignment
-      | TokenType::AddAssign
-      | TokenType::MulAssign
-      | TokenType::DivAssign
-      | TokenType::SubAssign => true,
+      TokenType::Assignment => true,
       _ => false,
     }
   }
 
   pub fn is_combo_assignment(&self) -> bool {
     match self.get_type() {
-      TokenType::AddAssign | TokenType::MulAssign | TokenType::SubAssign | TokenType::DivAssign => {
-        true
-      }
+      TokenType::AddAssign
+      | TokenType::MulAssign
+      | TokenType::DivAssign
+      | TokenType::SubAssign
+      | TokenType::ModAssign
+      | TokenType::ShlAssign
+      | TokenType::ShrAssign
+      | TokenType::AndAssign
+      | TokenType::OrAssign
+      | TokenType::XorAssign
+      | TokenType::Increment
+      | TokenType::Decrement => true,
       _ => false,
     }
   }
@@ -131,6 +136,14 @@ impl Token {
       TokenType::MulAssign => TokenType::Multiplication,
       TokenType::SubAssign => TokenType::Negation,
       TokenType::DivAssign => TokenType::Division,
+      TokenType::ModAssign => TokenType::Modulo,
+      TokenType::ShlAssign => TokenType::BitwiseShl,
+      TokenType::ShrAssign => TokenType::BitwiseShr,
+      TokenType::AndAssign => TokenType::BitwiseAnd,
+      TokenType::OrAssign => TokenType::BitwiseOr,
+      TokenType::XorAssign => TokenType::BitwiseXor,
+      TokenType::Increment => TokenType::AddAssign,
+      TokenType::Decrement => TokenType::SubAssign,
       _ => panic!(
         "Expected combo assignment operator. Got {}",
         self.get_type()
@@ -195,6 +208,14 @@ pub enum TokenType {
   MulAssign,
   SubAssign,
   DivAssign,
+  ModAssign,
+  ShlAssign,
+  ShrAssign,
+  AndAssign,
+  OrAssign,
+  XorAssign,
+  Increment,
+  Decrement,
 }
 
 impl TokenType {
@@ -234,6 +255,14 @@ impl TokenType {
       TokenType::MulAssign => "*=",
       TokenType::SubAssign => "-=",
       TokenType::DivAssign => "/=",
+      TokenType::ModAssign => "%=",
+      TokenType::ShlAssign => "<<=",
+      TokenType::ShrAssign => ">>=",
+      TokenType::AndAssign => "&=",
+      TokenType::OrAssign => "|=",
+      TokenType::XorAssign => "^=",
+      TokenType::Increment => "++",
+      TokenType::Decrement => "--",
     })
   }
 }
