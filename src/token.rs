@@ -112,6 +112,20 @@ impl Token {
     }
   }
 
+  pub fn is_postfix(&self) -> bool {
+    match self.get_type() {
+      TokenType::PostIncrement | TokenType::PostDecrement => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_comma(&self) -> bool {
+    match self.get_type() {
+      TokenType::Comma => true,
+      _ => false,
+    }
+  }
+
   pub fn is_combo_assignment(&self) -> bool {
     match self.get_type() {
       TokenType::AddAssign
@@ -152,13 +166,6 @@ impl Token {
         "Expected combo assignment operator. Got {}",
         self.get_type()
       ),
-    }
-  }
-
-  pub fn is_postfix(&self) -> bool {
-    match self.get_type() {
-      TokenType::PostIncrement | TokenType::PostDecrement => true,
-      _ => false,
     }
   }
 }
@@ -229,6 +236,7 @@ pub enum TokenType {
   PreDecrement,
   PostIncrement,
   PostDecrement,
+  Comma,
 }
 
 impl TokenType {
@@ -278,6 +286,7 @@ impl TokenType {
       TokenType::PreDecrement => "--",
       TokenType::PostIncrement => "++",
       TokenType::PostDecrement => "--",
+      TokenType::Comma => ",",
     })
   }
 }

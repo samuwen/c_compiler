@@ -39,6 +39,7 @@ pub fn lex(f: String) -> Vec<Token> {
     "\\s>=\\s",
     TokenType::GreaterThanOrEqual,
   ));
+  total.append(&mut find_tokens(&f, ",", TokenType::Comma));
   total.append(&mut find_tokens(&f, "\\s%\\s", TokenType::Modulo));
   total.append(&mut find_tokens(&f, "\\s&\\s", TokenType::BitwiseAnd));
   total.append(&mut find_tokens(&f, "\\s\\|\\s", TokenType::BitwiseOr));

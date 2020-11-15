@@ -295,6 +295,13 @@ impl Node<String> {
         self.generate_reverse_op_setup(child1, child2, out_vec, var_map, stack_index);
         out_vec.push(format!("\tsarl\t%cl, %eax"));
       }
+      "," => {
+        out_vec.push(format!(
+          "{}movl\t${}, %eax",
+          sep,
+          child2.get_data().get(0).unwrap()
+        ));
+      }
       _ => panic!("Unexpected operation: {}", operator),
     }
   }

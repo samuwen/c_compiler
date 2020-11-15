@@ -84,10 +84,26 @@ fn parse_declare_statement(tokens: &mut Vec<Token>) -> Node<String> {
 // <statement> ::= <exp> ";"
 fn parse_expression_statement(tokens: &mut Vec<Token>) -> Node<String> {
   let mut n = Node::new(NodeType::ExpressionStatement);
-  n.add_child(parse_assignment_expression(tokens));
+  n.add_child(parse_comma_expression(tokens));
   let token = get_next_token(tokens);
   check_type(&TokenType::Semicolon, &token);
   n
+}
+
+// <exp> ::= <assignment-exp> { "," <assignment-exp> }
+fn parse_comma_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut and_exp = parse_assignment_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_comma() {
+    let op_token = get_next_token(tokens);
+    let next_and_exp = parse_assignment_expression(tokens);
+    let mut binary_op = Node::new(NodeType::BinaryOp);
+    binary_op.add_data(op_token.get_value());
+    binary_op.add_children(vec![and_exp, next_and_exp]);
+    and_exp = binary_op;
+    next = peek_next_token(tokens);
+  }
+  and_exp
 }
 
 // <exp> ::= <logical-or-exp> { "=" <logical-or-exp> }
@@ -96,33 +112,32 @@ fn parse_assignment_expression(tokens: &mut Vec<Token>) -> Node<String> {
   let mut next = peek_next_token(tokens);
   while next.is_assignment() || next.is_combo_assignment() {
     let op_token = get_next_token(tokens);
+    let mut assignment = Node::new(NodeType::Assignment);
+    assignment.add_data(or_exp.get_data().get(0).expect("No data found").to_owned());
     match op_token.is_postfix() {
       true => {
-        let mut assignment = Node::new(NodeType::Assignment);
-        assignment.add_data(or_exp.get_data().get(0).expect("No data found").to_owned());
         let mut unary_op = Node::new(NodeType::UnaryOp);
         unary_op.add_data(op_token.get_type().to_string());
         assignment.add_child(unary_op);
-        or_exp = assignment;
-        next = peek_next_token(tokens);
       }
       false => {
         let next_exp = parse_assignment_expression(tokens);
-        let mut assignment = Node::new(NodeType::Assignment);
-        assignment.add_data(or_exp.get_data().get(0).expect("No data found").to_owned());
-        if op_token.is_combo_assignment() {
-          let op = op_token.get_combo_assignment_op();
-          let mut binary_op = Node::new(NodeType::BinaryOp);
-          binary_op.add_data(op.to_string());
-          binary_op.add_children(vec![or_exp, next_exp]);
-          assignment.add_child(binary_op);
-        } else {
-          assignment.add_children(vec![or_exp, next_exp]);
+        match op_token.is_combo_assignment() {
+          true => {
+            let op = op_token.get_combo_assignment_op();
+            let mut binary_op = Node::new(NodeType::BinaryOp);
+            binary_op.add_data(op.to_string());
+            binary_op.add_children(vec![or_exp, next_exp]);
+            assignment.add_child(binary_op);
+          }
+          false => {
+            assignment.add_children(vec![or_exp, next_exp]);
+          }
         }
-        or_exp = assignment;
-        next = peek_next_token(tokens);
       }
     }
+    or_exp = assignment;
+    next = peek_next_token(tokens);
   }
   or_exp
 }
@@ -293,7 +308,7 @@ fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
   let expression = match next.get_type() {
     TokenType::OParen => {
       get_next_token(tokens);
-      let expression = parse_logical_or_expression(tokens);
+      let expression = parse_comma_expression(tokens);
       let token = get_next_token(tokens);
       check_type(&TokenType::CParen, &token);
       expression
