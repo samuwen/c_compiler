@@ -144,6 +144,7 @@ impl Node<String> {
         NodeType::BinaryOp => child.generate_binary_op_asm(out_vec, var_map, stack_index),
         NodeType::Assignment => child.generate_assignment_asm(out_vec, var_map, stack_index),
         NodeType::Variable => child.generate_variable_asm(out_vec, var_map),
+        NodeType::Conditional => child.generate_conditional_asm(out_vec, var_map, stack_index),
         _ => panic!("Unexpected node type: {:?}", child.get_type()),
       }
     }
@@ -325,6 +326,7 @@ impl Node<String> {
         NodeType::Assignment => child.generate_assignment_asm(out_vec, var_map, stack_index),
         NodeType::Variable => child.generate_variable_asm(out_vec, var_map),
         NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map, stack_index),
+        NodeType::Conditional => child.generate_conditional_asm(out_vec, var_map, stack_index),
         _ => panic!("Unexpected node type: {:?}", child.get_type()),
       };
       let offset = var_map
@@ -344,6 +346,47 @@ impl Node<String> {
       .get(&var_name)
       .expect("Variable accessed before declaration");
     out_vec.push(format!("{}movl\t{}(%ebp), %eax", get_separator(), offset));
+  }
+
+  fn generate_conditional_asm(
+    &mut self,
+    out_vec: &mut Vec<String>,
+    var_map: &mut HashMap<String, isize>,
+    stack_index: &mut isize,
+  ) {
+    let label1 = get_next_label();
+    let label2 = get_next_label();
+    let sep = get_separator();
+    let mut child1 = self.children.remove(0);
+    match child1.get_type() {
+      NodeType::BinaryOp => child1.generate_binary_op_asm(out_vec, var_map, stack_index),
+      NodeType::Integer => child1.generate_integer_asm(out_vec),
+      NodeType::Variable => child1.generate_variable_asm(out_vec, var_map),
+      _ => panic!("Expected BinOp or Int, got {:?}", child1.get_type()),
+    }
+    out_vec.push(format!("{}cmpl\t$0, %eax", sep));
+    out_vec.push(format!("{}je\t{}", sep, label1));
+    let mut child2 = self.children.remove(0);
+    match child2.get_type() {
+      NodeType::BinaryOp => child2.generate_binary_op_asm(out_vec, var_map, stack_index),
+      NodeType::Integer => child2.generate_integer_asm(out_vec),
+      NodeType::Conditional => child2.generate_conditional_asm(out_vec, var_map, stack_index),
+      NodeType::Assignment => child2.generate_assignment_asm(out_vec, var_map, stack_index),
+      _ => panic!(
+        "Expected BinOp, Int, or Conditional, got {:?}",
+        child2.get_type()
+      ),
+    }
+    out_vec.push(format!("{}jmp\t{}", sep, label2));
+    out_vec.push(format!("{}:", label1));
+    let mut child3 = self.children.remove(0);
+    match child3.get_type() {
+      NodeType::Integer => child3.generate_integer_asm(out_vec),
+      NodeType::Conditional => child3.generate_conditional_asm(out_vec, var_map, stack_index),
+      NodeType::Assignment => child3.generate_assignment_asm(out_vec, var_map, stack_index),
+      _ => panic!("Expected Int, got {:?}", child3.get_type()),
+    }
+    out_vec.push(format!("{}:", label2));
   }
 
   fn generate_child_asm(
