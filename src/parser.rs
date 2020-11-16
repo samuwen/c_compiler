@@ -15,7 +15,7 @@ fn parse_program(tokens: &mut Vec<Token>) -> Node<String> {
   n
 }
 
-// <function> ::= "int" <id> "(" ")" "{" { <statement> } "}"
+// <function> ::= "int" <id> "(" ")" "{" { <block-item> } "}"
 fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   let mut n = Node::new(NodeType::Function);
   let token = get_next_token(tokens);
@@ -32,13 +32,9 @@ fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   check_type(&TokenType::OBrace, &token);
   let mut next = peek_next_token(tokens);
   while next.get_type() != &TokenType::CBrace {
-    // <statement> ::= "return" <exp> ";" | <exp> ";" | "int" <id> [ = <exp>] ";"
-    let statement = match next.get_type() {
-      TokenType::ReturnKeyword => parse_return_statement(tokens),
-      TokenType::IntKeyword => parse_declare_statement(tokens),
-      _ => parse_expression_statement(tokens),
-    };
-    n.add_child(statement);
+    // <block-item> ::= <statement> | <declaration>
+    let block_item = parse_block_item(tokens);
+    n.add_child(block_item);
     next = peek_next_token(tokens);
   }
   let token = get_next_token(tokens);
@@ -46,20 +42,18 @@ fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   n
 }
 
-// <statement> ::= "return" <exp> ";"
-fn parse_return_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::ReturnStatement);
-  let token = get_next_token(tokens);
-  check_type(&TokenType::ReturnKeyword, &token);
-  n.add_child(parse_logical_or_expression(tokens));
-  let token = get_next_token(tokens);
-  check_type(&TokenType::Semicolon, &token);
-  n
+// <block-item> ::= <statement> | <declaration>
+fn parse_block_item(tokens: &mut Vec<Token>) -> Node<String> {
+  let next = peek_next_token(tokens);
+  match next.get_type() {
+    TokenType::IntKeyword => parse_declaration(tokens),
+    _ => parse_statement(tokens),
+  }
 }
 
-// <statement> ::= "int" <id> [ = <exp>] ";"
-fn parse_declare_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::DeclareStatement);
+// <declaration> ::= "int" <id> [ = <exp> ] ";"
+fn parse_declaration(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::Declaration);
   let token = get_next_token(tokens);
   check_type(&TokenType::IntKeyword, &token);
   let token = get_next_token(tokens);
@@ -77,6 +71,49 @@ fn parse_declare_statement(tokens: &mut Vec<Token>) -> Node<String> {
       "Expected Semicolon or Assignment, got {:?}",
       token.get_type()
     ),
+  }
+  n
+}
+
+// <statement> ::= "return" <exp> ";" | <exp> ";" | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
+  let next = peek_next_token(tokens);
+  match next.get_type() {
+    TokenType::ReturnKeyword => parse_return_statement(tokens),
+    TokenType::IfKeyword => parse_if_statement(tokens),
+    _ => parse_expression_statement(tokens),
+  }
+}
+
+// <statement> ::= "return" <exp> ";"
+fn parse_return_statement(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::ReturnStatement);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::ReturnKeyword, &token);
+  n.add_child(parse_comma_expression(tokens));
+  let token = get_next_token(tokens);
+  check_type(&TokenType::Semicolon, &token);
+  n
+}
+
+// "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+fn parse_if_statement(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::IfStatement);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::IfKeyword, &token);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::OParen, &token);
+  let expression = parse_comma_expression(tokens);
+  n.add_child(expression);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::CParen, &token);
+  let statement = parse_statement(tokens);
+  n.add_child(statement);
+  let next = peek_next_token(tokens);
+  if next.get_type() == &TokenType::ElseKeyword {
+    get_next_token(tokens);
+    let statement = parse_statement(tokens);
+    n.add_child(statement);
   }
   n
 }

@@ -11,7 +11,11 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, ";", TokenType::Semicolon));
   total.append(&mut find_tokens(&f, "int", TokenType::IntKeyword));
   total.append(&mut find_tokens(&f, "return", TokenType::ReturnKeyword));
-  total.append(&mut find_tokens(&f, "[a-zA-Z]\\w*", TokenType::Identifier));
+  total.append(&mut find_tokens(
+    &f,
+    "(?![int]|[return]|[if]|[else])([a-zA-Z_]+)",
+    TokenType::Identifier,
+  ));
   total.append(&mut find_tokens(&f, "[0-9]+", TokenType::Integer));
   total.append(&mut find_tokens(
     &f,
@@ -77,8 +81,11 @@ pub fn lex(f: String) -> Vec<Token> {
     "(?<=[0-9|a-zA-Z])--",
     TokenType::PostDecrement,
   ));
+  total.append(&mut find_tokens(&f, "if", TokenType::IfKeyword));
+  total.append(&mut find_tokens(&f, "else", TokenType::ElseKeyword));
+  total.append(&mut find_tokens(&f, ":", TokenType::Colon));
+  total.append(&mut find_tokens(&f, "\\?", TokenType::QuestionMark));
   total.sort();
-  total.dedup();
   debug!("{:?}", total);
   total
 }

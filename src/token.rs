@@ -237,6 +237,10 @@ pub enum TokenType {
   PostIncrement,
   PostDecrement,
   Comma,
+  IfKeyword,
+  ElseKeyword,
+  Colon,
+  QuestionMark,
 }
 
 impl TokenType {
@@ -287,6 +291,10 @@ impl TokenType {
       TokenType::PostIncrement => "++",
       TokenType::PostDecrement => "--",
       TokenType::Comma => ",",
+      TokenType::IfKeyword => "if",
+      TokenType::ElseKeyword => "else",
+      TokenType::Colon => ":",
+      TokenType::QuestionMark => "?",
     })
   }
 }

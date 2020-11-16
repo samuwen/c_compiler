@@ -114,7 +114,7 @@ impl Node<String> {
       NodeType::ExpressionStatement => {
         self.handle_statement_children(out_vec, var_map, stack_index);
       }
-      NodeType::DeclareStatement => {
+      NodeType::Declaration => {
         let var_name = self.data.remove(0);
         if var_map.contains_key(&var_name) {
           panic!("Cannot declare variable {} twice", var_name);
@@ -434,9 +434,10 @@ impl fmt::Display for Node<String> {
 pub enum NodeType {
   Program,
   Function,
+  Declaration,
   ReturnStatement,
-  DeclareStatement,
   ExpressionStatement,
+  IfStatement,
   Integer,
   UnaryOp,
   BinaryOp,
