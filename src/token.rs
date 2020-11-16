@@ -46,6 +46,13 @@ impl Token {
     }
   }
 
+  pub fn is_conditional(&self) -> bool {
+    match self.get_type() {
+      TokenType::QuestionMark => true,
+      _ => false,
+    }
+  }
+
   pub fn is_logical_or(&self) -> bool {
     match self.get_type() {
       TokenType::Or => true,

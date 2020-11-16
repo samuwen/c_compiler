@@ -443,4 +443,5 @@ pub enum NodeType {
   BinaryOp,
   Variable,
   Assignment,
+  Conditional,
 }

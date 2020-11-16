@@ -63,7 +63,7 @@ fn parse_declaration(tokens: &mut Vec<Token>) -> Node<String> {
   match token.get_type() {
     TokenType::Semicolon => (),
     TokenType::Assignment => {
-      n.add_child(parse_assignment_expression(tokens));
+      n.add_child(parse_comma_expression(tokens));
       let token = get_next_token(tokens);
       check_type(&TokenType::Semicolon, &token);
     }
@@ -129,23 +129,23 @@ fn parse_expression_statement(tokens: &mut Vec<Token>) -> Node<String> {
 
 // <exp> ::= <assignment-exp> { "," <assignment-exp> }
 fn parse_comma_expression(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut and_exp = parse_assignment_expression(tokens);
+  let mut assign_exp = parse_assignment_expression(tokens);
   let mut next = peek_next_token(tokens);
   while next.is_comma() {
     let op_token = get_next_token(tokens);
-    let next_and_exp = parse_assignment_expression(tokens);
+    let next_assign_exp = parse_assignment_expression(tokens);
     let mut binary_op = Node::new(NodeType::BinaryOp);
     binary_op.add_data(op_token.get_value());
-    binary_op.add_children(vec![and_exp, next_and_exp]);
-    and_exp = binary_op;
+    binary_op.add_children(vec![assign_exp, next_assign_exp]);
+    assign_exp = binary_op;
     next = peek_next_token(tokens);
   }
-  and_exp
+  assign_exp
 }
 
 // <exp> ::= <logical-or-exp> { "=" <logical-or-exp> }
 fn parse_assignment_expression(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut or_exp = parse_logical_or_expression(tokens);
+  let mut or_exp = parse_conditional_expression(tokens);
   let mut next = peek_next_token(tokens);
   while next.is_assignment() || next.is_combo_assignment() {
     let op_token = get_next_token(tokens);
@@ -174,6 +174,26 @@ fn parse_assignment_expression(tokens: &mut Vec<Token>) -> Node<String> {
       }
     }
     or_exp = assignment;
+    next = peek_next_token(tokens);
+  }
+  or_exp
+}
+
+// <exp> ::= <logical-or-exp> [ "?" <exp> ":" <conditional-exp> ]
+fn parse_conditional_expression(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut or_exp = parse_logical_or_expression(tokens);
+  let mut next = peek_next_token(tokens);
+  while next.is_conditional() {
+    let mut conditional_exp = Node::new(NodeType::Conditional);
+    get_next_token(tokens); // discard question mark
+    let true_exp = parse_comma_expression(tokens);
+    let token = get_next_token(tokens);
+    check_type(&TokenType::Colon, &token);
+    let false_exp = parse_conditional_expression(tokens);
+    conditional_exp.add_child(or_exp);
+    conditional_exp.add_child(true_exp);
+    conditional_exp.add_child(false_exp);
+    or_exp = conditional_exp;
     next = peek_next_token(tokens);
   }
   or_exp
