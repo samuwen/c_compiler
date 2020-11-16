@@ -13,7 +13,7 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "return", TokenType::ReturnKeyword));
   total.append(&mut find_tokens(
     &f,
-    "\\b([a-zA-Z_]+)\\b(?<!int|return)",
+    "\\b([a-zA-Z_]+)\\b(?<!int|return|if|else)",
     TokenType::Identifier,
   ));
   total.append(&mut find_tokens(&f, "[0-9]+", TokenType::Integer));
