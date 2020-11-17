@@ -75,12 +75,16 @@ fn parse_declaration(tokens: &mut Vec<Token>) -> Node<String> {
   n
 }
 
-// <statement> ::= "return" <exp> ";" | <exp> ";" | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+// <statement> ::= "return" <exp> ";"
+// | <exp> ";"
+// | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+// | "{" { <block-item> } "}"
 fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
   let next = peek_next_token(tokens);
   match next.get_type() {
     TokenType::ReturnKeyword => parse_return_statement(tokens),
     TokenType::IfKeyword => parse_if_statement(tokens),
+    TokenType::OBrace => parse_compound_statement(tokens),
     _ => parse_expression_statement(tokens),
   }
 }
@@ -124,6 +128,24 @@ fn parse_expression_statement(tokens: &mut Vec<Token>) -> Node<String> {
   n.add_child(parse_comma_expression(tokens));
   let token = get_next_token(tokens);
   check_type(&TokenType::Semicolon, &token);
+  n
+}
+
+// <statement> ::= "{" { <block-item> } "}"
+fn parse_compound_statement(tokens: &mut Vec<Token>) -> Node<String> {
+  let mut n = Node::new(NodeType::CompoundStatement);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::OBrace, &token);
+  let block_item = parse_block_item(tokens);
+  n.add_child(block_item);
+  let mut next = peek_next_token(tokens);
+  while next.get_type() != &TokenType::CBrace {
+    let block_item = parse_block_item(tokens);
+    n.add_child(block_item);
+    next = peek_next_token(tokens);
+  }
+  let token = get_next_token(tokens);
+  check_type(&TokenType::CBrace, &token);
   n
 }
 

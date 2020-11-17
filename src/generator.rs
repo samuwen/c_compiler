@@ -519,6 +519,7 @@ pub enum NodeType {
   ReturnStatement,
   ExpressionStatement,
   IfStatement,
+  CompoundStatement,
   Integer,
   UnaryOp,
   BinaryOp,
