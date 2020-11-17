@@ -80,10 +80,8 @@ impl Node<String> {
     let sep = get_separator();
     out_vec.push(format!("{}pushl\t%ebp", sep));
     out_vec.push(format!("{}movl\t%esp, %ebp", sep));
-    let has_return = self
-      .children
-      .iter()
-      .any(|c| c.get_type() == &NodeType::ReturnStatement);
+    let has_return = self.has_return_statement();
+    // C supports int function with no return statement. In that event, they return 0
     match has_return {
       true => {
         for statement in self.children.iter_mut() {
@@ -98,6 +96,16 @@ impl Node<String> {
     out_vec.push(format!("{}movl\t%ebp, %esp", sep));
     out_vec.push(format!("{}pop\t%ebp", sep));
     out_vec.push(format!("{}ret", get_separator()));
+  }
+
+  fn has_return_statement(&self) -> bool {
+    self.children.iter().any(|c| {
+      if c.get_type() == &NodeType::ReturnStatement {
+        return true;
+      } else {
+        return c.has_return_statement();
+      }
+    })
   }
 
   fn generate_statement_asm(
@@ -127,6 +135,7 @@ impl Node<String> {
         var_map.insert(var_name, *stack_index);
         *stack_index -= 4;
       }
+      NodeType::IfStatement => self.generate_if_statement_asm(out_vec, var_map, stack_index),
       _ => panic!("Unexpected node type: {:?}", self.get_type()),
     }
   }
@@ -385,6 +394,35 @@ impl Node<String> {
       NodeType::Conditional => child3.generate_conditional_asm(out_vec, var_map, stack_index),
       NodeType::Assignment => child3.generate_assignment_asm(out_vec, var_map, stack_index),
       _ => panic!("Expected Int, got {:?}", child3.get_type()),
+    }
+    out_vec.push(format!("{}:", label2));
+  }
+
+  fn generate_if_statement_asm(
+    &mut self,
+    out_vec: &mut Vec<String>,
+    var_map: &mut HashMap<String, isize>,
+    stack_index: &mut isize,
+  ) {
+    let label1 = get_next_label();
+    let label2 = get_next_label();
+    let sep = get_separator();
+    let mut condition = self.children.remove(0);
+    match condition.get_type() {
+      NodeType::BinaryOp => condition.generate_binary_op_asm(out_vec, var_map, stack_index),
+      NodeType::Integer => condition.generate_integer_asm(out_vec),
+      NodeType::Variable => condition.generate_variable_asm(out_vec, var_map),
+      _ => panic!("Expected BinOp or Int, got {:?}", condition.get_type()),
+    }
+    out_vec.push(format!("{}cmpl\t$0, %eax", sep));
+    out_vec.push(format!("{}je\t{}", sep, label1));
+    let mut true_block = self.children.remove(0);
+    true_block.generate_statement_asm(out_vec, var_map, stack_index);
+    out_vec.push(format!("{}jmp\t{}", sep, label2));
+    out_vec.push(format!("{}:", label1));
+    if self.children.len() > 0 {
+      let mut false_block = self.children.remove(0);
+      false_block.generate_statement_asm(out_vec, var_map, stack_index);
     }
     out_vec.push(format!("{}:", label2));
   }
