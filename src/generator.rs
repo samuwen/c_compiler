@@ -1,4 +1,5 @@
 use crate::Tree;
+use log::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -83,11 +84,7 @@ impl Node<String> {
     let has_return = self.has_return_statement();
     // C supports int function with no return statement. In that event, they return 0
     match has_return {
-      true => {
-        for statement in self.children.iter_mut() {
-          statement.generate_statement_asm(out_vec, &mut map, &mut stack_index);
-        }
-      }
+      true => self.generate_block_item_asm(out_vec, &mut map, &mut stack_index),
       false => {
         out_vec.push(format!("{}movl\t$0, %eax", sep));
       }
@@ -96,6 +93,34 @@ impl Node<String> {
     out_vec.push(format!("{}movl\t%ebp, %esp", sep));
     out_vec.push(format!("{}pop\t%ebp", sep));
     out_vec.push(format!("{}ret", get_separator()));
+  }
+
+  fn generate_block(
+    &mut self,
+    out_vec: &mut Vec<String>,
+    var_map: &mut HashMap<String, isize>,
+    stack_index: &mut isize,
+  ) {
+    let mut current_scope_vars: Vec<String> = vec![];
+    let block_map = var_map.clone();
+  }
+
+  fn generate_block_item_asm(
+    &mut self,
+    out_vec: &mut Vec<String>,
+    var_map: &mut HashMap<String, isize>,
+    stack_index: &mut isize,
+  ) {
+    let mut current_scope_vars: Vec<String> = vec![];
+    for child in self.children.iter_mut() {
+      match child.is_statement() {
+        true => child.generate_statement_asm(out_vec, var_map, stack_index),
+        false => {
+          current_scope_vars =
+            child.generate_declaration_asm(out_vec, var_map, stack_index, current_scope_vars);
+        }
+      }
+    }
   }
 
   fn has_return_statement(&self) -> bool {
@@ -114,7 +139,6 @@ impl Node<String> {
     var_map: &mut HashMap<String, isize>,
     stack_index: &mut isize,
   ) {
-    let sep = get_separator();
     match self.get_type() {
       NodeType::ReturnStatement => {
         self.handle_statement_children(out_vec, var_map, stack_index);
@@ -122,22 +146,34 @@ impl Node<String> {
       NodeType::ExpressionStatement => {
         self.handle_statement_children(out_vec, var_map, stack_index);
       }
-      NodeType::Declaration => {
-        let var_name = self.data.remove(0);
-        if var_map.contains_key(&var_name) {
-          panic!("Cannot declare variable {} twice", var_name);
-        }
-        match self.children.len() {
-          0 => out_vec.push(format!("{}movl\t$0, %eax", sep)),
-          _ => self.handle_statement_children(out_vec, var_map, stack_index),
-        }
-        out_vec.push(format!("{}pushl\t%eax", sep));
-        var_map.insert(var_name, *stack_index);
-        *stack_index -= 4;
-      }
       NodeType::IfStatement => self.generate_if_statement_asm(out_vec, var_map, stack_index),
+      NodeType::CompoundStatement => self.generate_block_item_asm(out_vec, var_map, stack_index),
       _ => panic!("Unexpected node type: {:?}", self.get_type()),
     }
+  }
+
+  fn generate_declaration_asm(
+    &mut self,
+    out_vec: &mut Vec<String>,
+    var_map: &mut HashMap<String, isize>,
+    stack_index: &mut isize,
+    mut scope_vars: Vec<String>,
+  ) -> Vec<String> {
+    let sep = get_separator();
+    let var_name = self.data.remove(0);
+    if scope_vars.contains(&var_name) {
+      panic!("Cannot declare variable {} twice", var_name);
+    }
+    match self.children.len() {
+      0 => out_vec.push(format!("{}movl\t$0, %eax", sep)),
+      _ => self.handle_statement_children(out_vec, var_map, stack_index),
+    }
+    debug!("{:?}", var_map);
+    out_vec.push(format!("{}pushl\t%eax", sep));
+    var_map.insert(var_name.to_owned(), *stack_index);
+    scope_vars.push(var_name);
+    *stack_index -= 4;
+    scope_vars
   }
 
   fn handle_statement_children(
@@ -149,8 +185,8 @@ impl Node<String> {
     for child in self.children.iter_mut() {
       match child.get_type() {
         NodeType::Integer => child.generate_integer_asm(out_vec),
-        NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map, stack_index),
-        NodeType::BinaryOp => child.generate_binary_op_asm(out_vec, var_map, stack_index),
+        NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map),
+        NodeType::BinaryOp => child.generate_binary_op_asm(out_vec, var_map),
         NodeType::Assignment => child.generate_assignment_asm(out_vec, var_map, stack_index),
         NodeType::Variable => child.generate_variable_asm(out_vec, var_map),
         NodeType::Conditional => child.generate_conditional_asm(out_vec, var_map, stack_index),
@@ -163,12 +199,11 @@ impl Node<String> {
     &mut self,
     out_vec: &mut Vec<String>,
     var_map: &mut HashMap<String, isize>,
-    stack_index: &mut isize,
   ) {
     for child in self.children.iter_mut() {
       match child.get_type() {
         NodeType::Integer => child.generate_integer_asm(out_vec),
-        NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map, stack_index),
+        NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map),
         NodeType::Variable => child.generate_variable_asm(out_vec, var_map),
         _ => panic!("Unexpected node type: {:?}", child.get_type()),
       }
@@ -201,7 +236,6 @@ impl Node<String> {
     &mut self,
     out_vec: &mut Vec<String>,
     var_map: &mut HashMap<String, isize>,
-    stack_index: &mut isize,
   ) {
     let sep = get_separator();
     let child1 = self.children.remove(0);
@@ -209,56 +243,56 @@ impl Node<String> {
     let operator = self.data.remove(0);
     match operator.as_str() {
       "+" => {
-        self.generate_standard_op_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_standard_op_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("{}addl\t%ecx, %eax", sep));
       }
       "*" => {
-        self.generate_standard_op_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_standard_op_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("{}imul\t%ecx, %eax", sep));
       }
       "-" => {
-        self.generate_standard_op_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_standard_op_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("{}subl\t%eax, %ecx", sep));
         out_vec.push(format!("{}movl\t%ecx, %eax", sep));
       }
       "/" => {
-        self.generate_reverse_op_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_reverse_op_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("{}cdq", sep));
         out_vec.push(format!("{}idivl\t%ecx", sep));
       }
       "==" => {
-        self.generate_relational_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_relational_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("{}sete\t%al", sep));
       }
       "!=" => {
-        self.generate_relational_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_relational_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("{}setne\t%al", sep));
       }
       "<" => {
-        self.generate_relational_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_relational_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("{}setl\t%al", sep));
       }
       "<=" => {
-        self.generate_relational_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_relational_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("{}setle\t%al", sep));
       }
       ">" => {
-        self.generate_relational_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_relational_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("{}setg\t%al", sep));
       }
       ">=" => {
-        self.generate_relational_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_relational_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("{}setge\t%al", sep));
       }
       "&&" => {
         let label1 = get_next_label();
         let label2 = get_next_label();
-        self.generate_child_asm(child1, out_vec, var_map, stack_index);
+        self.generate_child_asm(child1, out_vec, var_map);
         out_vec.push(format!("{}cmpl\t$0, %eax", sep));
         out_vec.push(format!("{}jne\t{}", sep, label1));
         out_vec.push(format!("{}jmp\t{}", sep, label2));
         out_vec.push(format!("{}:", label1));
-        self.generate_child_asm(child2, out_vec, var_map, stack_index);
+        self.generate_child_asm(child2, out_vec, var_map);
         out_vec.push(format!("{}cmpl\t$0, %eax", sep));
         out_vec.push(format!("{}movl\t$0, %eax", sep));
         out_vec.push(format!("{}setne\t%al", sep));
@@ -267,42 +301,42 @@ impl Node<String> {
       "||" => {
         let label1 = get_next_label();
         let label2 = get_next_label();
-        self.generate_child_asm(child1, out_vec, var_map, stack_index);
+        self.generate_child_asm(child1, out_vec, var_map);
         out_vec.push(format!("{}cmpl\t$0, %eax", sep));
         out_vec.push(format!("{}je\t{}", sep, label1));
         out_vec.push(format!("{}movl\t$1, %eax", sep));
         out_vec.push(format!("{}jmp\t{}", sep, label2));
         out_vec.push(format!("{}:", label1));
-        self.generate_child_asm(child2, out_vec, var_map, stack_index);
+        self.generate_child_asm(child2, out_vec, var_map);
         out_vec.push(format!("{}cmpl\t$0, %eax", sep));
         out_vec.push(format!("{}movl\t$0, %eax", sep));
         out_vec.push(format!("{}setne\t%al", sep));
         out_vec.push(format!("{}:", label2));
       }
       "%" => {
-        self.generate_reverse_op_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_reverse_op_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("\tcdq"));
         out_vec.push(format!("\tidivl\t%ecx"));
         out_vec.push(format!("\tmovl\t%edx, %eax"));
       }
       "&" => {
-        self.generate_standard_op_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_standard_op_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("\tand\t%ecx, %eax"));
       }
       "|" => {
-        self.generate_standard_op_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_standard_op_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("\tor\t%ecx, %eax"));
       }
       "^" => {
-        self.generate_standard_op_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_standard_op_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("\txor\t%ecx, %eax"));
       }
       "<<" => {
-        self.generate_reverse_op_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_reverse_op_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("\tsall\t%cl, %eax"));
       }
       ">>" => {
-        self.generate_reverse_op_setup(child1, child2, out_vec, var_map, stack_index);
+        self.generate_reverse_op_setup(child1, child2, out_vec, var_map);
         out_vec.push(format!("\tsarl\t%cl, %eax"));
       }
       "," => {
@@ -330,11 +364,11 @@ impl Node<String> {
     let var_name = self.data.remove(0);
     for child in self.children.iter_mut() {
       match child.get_type() {
-        NodeType::BinaryOp => child.generate_binary_op_asm(out_vec, var_map, stack_index),
+        NodeType::BinaryOp => child.generate_binary_op_asm(out_vec, var_map),
         NodeType::Integer => child.generate_integer_asm(out_vec),
         NodeType::Assignment => child.generate_assignment_asm(out_vec, var_map, stack_index),
         NodeType::Variable => child.generate_variable_asm(out_vec, var_map),
-        NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map, stack_index),
+        NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map),
         NodeType::Conditional => child.generate_conditional_asm(out_vec, var_map, stack_index),
         _ => panic!("Unexpected node type: {:?}", child.get_type()),
       };
@@ -368,7 +402,7 @@ impl Node<String> {
     let sep = get_separator();
     let mut child1 = self.children.remove(0);
     match child1.get_type() {
-      NodeType::BinaryOp => child1.generate_binary_op_asm(out_vec, var_map, stack_index),
+      NodeType::BinaryOp => child1.generate_binary_op_asm(out_vec, var_map),
       NodeType::Integer => child1.generate_integer_asm(out_vec),
       NodeType::Variable => child1.generate_variable_asm(out_vec, var_map),
       _ => panic!("Expected BinOp or Int, got {:?}", child1.get_type()),
@@ -377,7 +411,7 @@ impl Node<String> {
     out_vec.push(format!("{}je\t{}", sep, label1));
     let mut child2 = self.children.remove(0);
     match child2.get_type() {
-      NodeType::BinaryOp => child2.generate_binary_op_asm(out_vec, var_map, stack_index),
+      NodeType::BinaryOp => child2.generate_binary_op_asm(out_vec, var_map),
       NodeType::Integer => child2.generate_integer_asm(out_vec),
       NodeType::Conditional => child2.generate_conditional_asm(out_vec, var_map, stack_index),
       NodeType::Assignment => child2.generate_assignment_asm(out_vec, var_map, stack_index),
@@ -409,7 +443,7 @@ impl Node<String> {
     let sep = get_separator();
     let mut condition = self.children.remove(0);
     match condition.get_type() {
-      NodeType::BinaryOp => condition.generate_binary_op_asm(out_vec, var_map, stack_index),
+      NodeType::BinaryOp => condition.generate_binary_op_asm(out_vec, var_map),
       NodeType::Integer => condition.generate_integer_asm(out_vec),
       NodeType::Variable => condition.generate_variable_asm(out_vec, var_map),
       _ => panic!("Expected BinOp or Int, got {:?}", condition.get_type()),
@@ -432,12 +466,11 @@ impl Node<String> {
     mut child: Node<String>,
     out_vec: &mut Vec<String>,
     var_map: &mut HashMap<String, isize>,
-    stack_index: &mut isize,
   ) {
     match child.get_type() {
       NodeType::Integer => child.generate_integer_asm(out_vec),
-      NodeType::BinaryOp => child.generate_binary_op_asm(out_vec, var_map, stack_index),
-      NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map, stack_index),
+      NodeType::BinaryOp => child.generate_binary_op_asm(out_vec, var_map),
+      NodeType::UnaryOp => child.generate_unary_op_asm(out_vec, var_map),
       NodeType::Variable => child.generate_variable_asm(out_vec, var_map),
       _ => panic!("Unexpected node type: {:?}", child.get_type()),
     };
@@ -449,12 +482,11 @@ impl Node<String> {
     c2: Node<String>,
     out_vec: &mut Vec<String>,
     var_map: &mut HashMap<String, isize>,
-    stack_index: &mut isize,
   ) {
     let sep = get_separator();
-    self.generate_child_asm(c1, out_vec, var_map, stack_index);
+    self.generate_child_asm(c1, out_vec, var_map);
     out_vec.push(format!("{}pushl\t%eax", sep));
-    self.generate_child_asm(c2, out_vec, var_map, stack_index);
+    self.generate_child_asm(c2, out_vec, var_map);
     out_vec.push(format!("{}pop\t%ecx", sep));
   }
 
@@ -464,12 +496,11 @@ impl Node<String> {
     c2: Node<String>,
     out_vec: &mut Vec<String>,
     var_map: &mut HashMap<String, isize>,
-    stack_index: &mut isize,
   ) {
     let sep = get_separator();
-    self.generate_child_asm(c2, out_vec, var_map, stack_index);
+    self.generate_child_asm(c2, out_vec, var_map);
     out_vec.push(format!("{}pushl\t%eax", sep));
-    self.generate_child_asm(c1, out_vec, var_map, stack_index);
+    self.generate_child_asm(c1, out_vec, var_map);
     out_vec.push(format!("{}pop\t%ecx", sep));
   }
 
@@ -479,10 +510,9 @@ impl Node<String> {
     c2: Node<String>,
     out_vec: &mut Vec<String>,
     var_map: &mut HashMap<String, isize>,
-    stack_index: &mut isize,
   ) {
     let sep = get_separator();
-    self.generate_standard_op_setup(c1, c2, out_vec, var_map, stack_index);
+    self.generate_standard_op_setup(c1, c2, out_vec, var_map);
     out_vec.push(format!("{}cmpl\t%eax, %ecx", sep));
     out_vec.push(format!("{}movl\t$0, %eax", sep));
   }
@@ -502,6 +532,16 @@ impl Node<String> {
       return_str.push_str(&child.format_self(count + 1));
     }
     return_str
+  }
+
+  fn is_statement(&self) -> bool {
+    match self.get_type() {
+      NodeType::IfStatement
+      | NodeType::ReturnStatement
+      | NodeType::ExpressionStatement
+      | NodeType::CompoundStatement => true,
+      _ => false,
+    }
   }
 }
 
