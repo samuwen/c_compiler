@@ -88,6 +88,7 @@ impl Node<String> {
       }
     }
     let sep = get_separator();
+    out_vec.push(format!("end:"));
     out_vec.push(format!("{}movl\t%ebp, %esp", sep));
     out_vec.push(format!("{}pop\t%ebp", sep));
     out_vec.push(format!("{}ret", get_separator()));
@@ -125,6 +126,7 @@ impl Node<String> {
     match self.get_type() {
       NodeType::ReturnStatement => {
         self.handle_statement_children(out_vec, var_map);
+        out_vec.push(format!("{}jmp end", get_separator()));
       }
       NodeType::ExpressionStatement => {
         self.handle_statement_children(out_vec, var_map);
