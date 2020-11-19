@@ -76,9 +76,15 @@ fn parse_declaration(tokens: &mut Vec<Token>) -> Node<String> {
 }
 
 // <statement> ::= "return" <exp> ";"
-// | <exp> ";"
-// | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
-// | "{" { <block-item> } "}"
+//                | <exp-option> ";"
+//                | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+//                | "{" { <block-item> } "}"
+//                | "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")"
+//                | "for" "(" <declaration> <exp-option> ";" <exp-option> ")"
+//                | "while" "(" <exp> ")" <statement>
+//                | "do" <statement> "while" "(" <exp> ")" ";"
+//                | "break" ";"
+//                | "continue" ";"
 fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
   let next = peek_next_token(tokens);
   match next.get_type() {
@@ -122,13 +128,22 @@ fn parse_if_statement(tokens: &mut Vec<Token>) -> Node<String> {
   n
 }
 
-// <statement> ::= <exp> ";"
+// <statement> ::= <exp-option> ";"
 fn parse_expression_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::ExpressionStatement);
-  n.add_child(parse_comma_expression(tokens));
-  let token = get_next_token(tokens);
-  check_type(&TokenType::Semicolon, &token);
-  n
+  let next = peek_next_token(tokens);
+  match next.get_type() {
+    TokenType::Semicolon | TokenType::CParen => {
+      get_next_token(tokens);
+      Node::new(NodeType::NullStatement)
+    }
+    _ => {
+      let mut n = Node::new(NodeType::ExpressionStatement);
+      n.add_child(parse_comma_expression(tokens));
+      let token = get_next_token(tokens);
+      check_type(&TokenType::Semicolon, &token);
+      n
+    }
+  }
 }
 
 // <statement> ::= "{" { <block-item> } "}"
