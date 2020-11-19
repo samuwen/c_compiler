@@ -13,7 +13,7 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "return", TokenType::ReturnKeyword));
   total.append(&mut find_tokens(
     &f,
-    "\\b([a-zA-Z_]+)\\b(?<!int|return|if|else)",
+    "\\b([a-zA-Z_]+)\\b(?<!int|return|if|else|for|do|while|continue|break)",
     TokenType::Identifier,
   ));
   total.append(&mut find_tokens(&f, "[0-9]+", TokenType::Integer));
@@ -85,6 +85,11 @@ pub fn lex(f: String) -> Vec<Token> {
   total.append(&mut find_tokens(&f, "else", TokenType::ElseKeyword));
   total.append(&mut find_tokens(&f, ":", TokenType::Colon));
   total.append(&mut find_tokens(&f, "\\?", TokenType::QuestionMark));
+  total.append(&mut find_tokens(&f, "for", TokenType::ForKeyword));
+  total.append(&mut find_tokens(&f, "do", TokenType::DoKeyword));
+  total.append(&mut find_tokens(&f, "while", TokenType::WhileKeyword));
+  total.append(&mut find_tokens(&f, "break", TokenType::BreakKeyword));
+  total.append(&mut find_tokens(&f, "continue", TokenType::ContinueKeyword));
   total.sort();
   debug!("{:?}", total);
   total

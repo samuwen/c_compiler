@@ -248,6 +248,11 @@ pub enum TokenType {
   ElseKeyword,
   Colon,
   QuestionMark,
+  ForKeyword,
+  DoKeyword,
+  WhileKeyword,
+  BreakKeyword,
+  ContinueKeyword,
 }
 
 impl TokenType {
@@ -302,6 +307,11 @@ impl TokenType {
       TokenType::ElseKeyword => "else",
       TokenType::Colon => ":",
       TokenType::QuestionMark => "?",
+      TokenType::DoKeyword => "do",
+      TokenType::ForKeyword => "for",
+      TokenType::WhileKeyword => "while",
+      TokenType::BreakKeyword => "break",
+      TokenType::ContinueKeyword => "continue",
     })
   }
 }
