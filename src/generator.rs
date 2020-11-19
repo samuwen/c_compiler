@@ -57,7 +57,7 @@ impl Node<String> {
     &self.data
   }
 
-  fn get_type(&self) -> &NodeType {
+  pub fn get_type(&self) -> &NodeType {
     &self._type
   }
 
@@ -507,6 +507,12 @@ pub enum NodeType {
   IfStatement,
   CompoundStatement,
   NullStatement,
+  ForStatement,
+  ForDeclStatement,
+  DoStatement,
+  WhileStatement,
+  BreakStatement,
+  ContinueStatement,
   Integer,
   UnaryOp,
   BinaryOp,
