@@ -95,21 +95,28 @@ impl Node<String> {
   }
 
   fn generate_block(&mut self, out_vec: &mut Vec<String>, var_map: Option<VarMap>) {
-    let mut map = match var_map {
+    let map = match var_map {
       Some(map) => VarMap::from(map),
       None => VarMap::new(),
     };
-    debug!("{:?}", map);
-    self.generate_block_item_asm(out_vec, &mut map);
+    trace!("{:?}", map);
+    self.generate_block_item_asm(out_vec, map);
   }
 
-  fn generate_block_item_asm(&mut self, out_vec: &mut Vec<String>, var_map: &mut VarMap) {
+  fn generate_block_item_asm(&mut self, out_vec: &mut Vec<String>, var_map: VarMap) {
+    let mut map = var_map;
     for child in self.children.iter_mut() {
       match child.is_statement() {
-        true => child.generate_statement_asm(out_vec, var_map),
-        false => child.generate_declaration_asm(out_vec, var_map),
+        true => {
+          child.generate_statement_asm(out_vec, &map);
+        }
+        false => {
+          map = child.generate_declaration_asm(out_vec, map);
+        }
       }
     }
+    let b_to_dealloc = 4 * map.vec.len();
+    out_vec.push(format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc));
   }
 
   fn has_return_statement(&self) -> bool {
@@ -122,7 +129,7 @@ impl Node<String> {
     })
   }
 
-  fn generate_statement_asm(&mut self, out_vec: &mut Vec<String>, var_map: &mut VarMap) {
+  fn generate_statement_asm(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
     match self.get_type() {
       NodeType::ReturnStatement => {
         self.handle_statement_children(out_vec, var_map);
@@ -137,19 +144,21 @@ impl Node<String> {
     }
   }
 
-  fn generate_declaration_asm(&mut self, out_vec: &mut Vec<String>, var_map: &mut VarMap) {
+  fn generate_declaration_asm(&mut self, out_vec: &mut Vec<String>, var_map: VarMap) -> VarMap {
+    let mut map = var_map;
     let sep = get_separator();
     let var_name = self.data.remove(0);
     match self.children.len() {
       0 => out_vec.push(format!("{}movl\t$0, %eax", sep)),
-      _ => self.handle_statement_children(out_vec, var_map),
+      _ => self.handle_statement_children(out_vec, &map),
     }
     out_vec.push(format!("{}pushl\t%eax", sep));
-    var_map.add_var(var_name.to_owned());
-    debug!("{:?}", var_map);
+    map.add_var(var_name.to_owned());
+    trace!("{:?}", map);
+    map
   }
 
-  fn handle_statement_children(&mut self, out_vec: &mut Vec<String>, var_map: &mut VarMap) {
+  fn handle_statement_children(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
     for child in self.children.iter_mut() {
       match child.get_type() {
         NodeType::Integer => child.generate_integer_asm(out_vec),
@@ -163,7 +172,7 @@ impl Node<String> {
     }
   }
 
-  fn generate_unary_op_asm(&mut self, out_vec: &mut Vec<String>, var_map: &mut VarMap) {
+  fn generate_unary_op_asm(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
     for child in self.children.iter_mut() {
       match child.get_type() {
         NodeType::Integer => child.generate_integer_asm(out_vec),
@@ -196,7 +205,7 @@ impl Node<String> {
     }
   }
 
-  fn generate_binary_op_asm(&mut self, out_vec: &mut Vec<String>, var_map: &mut VarMap) {
+  fn generate_binary_op_asm(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
     let sep = get_separator();
     let child1 = self.children.remove(0);
     let child2 = self.children.remove(0);
@@ -315,7 +324,7 @@ impl Node<String> {
     out_vec.push(format!("{}movl\t${}, %eax", sep, self.data.get(0).unwrap()));
   }
 
-  fn generate_assignment_asm(&mut self, out_vec: &mut Vec<String>, var_map: &mut VarMap) {
+  fn generate_assignment_asm(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
     let var_name = self.data.remove(0);
     for child in self.children.iter_mut() {
       match child.get_type() {
@@ -332,13 +341,13 @@ impl Node<String> {
     }
   }
 
-  fn generate_variable_asm(&mut self, out_vec: &mut Vec<String>, var_map: &mut VarMap) {
+  fn generate_variable_asm(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
     let var_name = self.data.remove(0);
     let offset = var_map.get_var(&var_name);
     out_vec.push(format!("{}movl\t{}(%ebp), %eax", get_separator(), offset));
   }
 
-  fn generate_conditional_asm(&mut self, out_vec: &mut Vec<String>, var_map: &mut VarMap) {
+  fn generate_conditional_asm(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
     let label1 = get_next_label();
     let label2 = get_next_label();
     let sep = get_separator();
@@ -374,7 +383,7 @@ impl Node<String> {
     out_vec.push(format!("{}:", label2));
   }
 
-  fn generate_if_statement_asm(&mut self, out_vec: &mut Vec<String>, var_map: &mut VarMap) {
+  fn generate_if_statement_asm(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
     let label1 = get_next_label();
     let label2 = get_next_label();
     let sep = get_separator();
@@ -402,7 +411,7 @@ impl Node<String> {
     &self,
     mut child: Node<String>,
     out_vec: &mut Vec<String>,
-    var_map: &mut VarMap,
+    var_map: &VarMap,
   ) {
     match child.get_type() {
       NodeType::Integer => child.generate_integer_asm(out_vec),
@@ -418,7 +427,7 @@ impl Node<String> {
     c1: Node<String>,
     c2: Node<String>,
     out_vec: &mut Vec<String>,
-    var_map: &mut VarMap,
+    var_map: &VarMap,
   ) {
     let sep = get_separator();
     self.generate_child_asm(c1, out_vec, var_map);
@@ -432,7 +441,7 @@ impl Node<String> {
     c1: Node<String>,
     c2: Node<String>,
     out_vec: &mut Vec<String>,
-    var_map: &mut VarMap,
+    var_map: &VarMap,
   ) {
     let sep = get_separator();
     self.generate_child_asm(c2, out_vec, var_map);
@@ -446,7 +455,7 @@ impl Node<String> {
     c1: Node<String>,
     c2: Node<String>,
     out_vec: &mut Vec<String>,
-    var_map: &mut VarMap,
+    var_map: &VarMap,
   ) {
     let sep = get_separator();
     self.generate_standard_op_setup(c1, c2, out_vec, var_map);
@@ -514,7 +523,7 @@ struct VarMap {
 
 impl VarMap {
   fn new() -> VarMap {
-    info!("Creating new map");
+    trace!("Creating new map");
     VarMap {
       map: HashMap::new(),
       vec: Vec::with_capacity(8),
@@ -523,7 +532,7 @@ impl VarMap {
   }
 
   fn from(var_map: VarMap) -> VarMap {
-    info!("Cloning map");
+    trace!("Cloning map");
     VarMap {
       map: var_map.map,
       vec: Vec::with_capacity(8),
@@ -532,7 +541,7 @@ impl VarMap {
   }
 
   fn add_var(&mut self, name: String) {
-    info!("Attempting to add variable '{}' to map", name);
+    trace!("Attempting to add variable '{}' to map", name);
     match self.vec.contains(&name) {
       false => {
         self.map.insert(name.to_owned(), self.stack_index);
@@ -543,7 +552,7 @@ impl VarMap {
     };
   }
 
-  fn get_var(&mut self, name: &String) -> isize {
+  fn get_var(&self, name: &String) -> isize {
     self
       .map
       .get(name)
