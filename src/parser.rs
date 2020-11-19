@@ -92,6 +92,7 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
     TokenType::IfKeyword => parse_if_statement(tokens),
     TokenType::OBrace => parse_compound_statement(tokens),
     TokenType::ForKeyword => parse_for_statement(tokens),
+    TokenType::WhileKeyword => parse_while_statement(tokens),
     _ => parse_expression_statement(tokens),
   }
 }
@@ -200,7 +201,18 @@ fn parse_for_statement(tokens: &mut Vec<Token>) -> Node<String> {
 
 // <statement> ::= "while" "(" <exp> ")" <statement>
 fn parse_while_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  todo!();
+  let mut n = Node::new(NodeType::WhileStatement);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::WhileKeyword, &token);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::OParen, &token);
+  let expression = parse_comma_expression(tokens);
+  n.add_child(expression);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::CParen, &token);
+  let statement = parse_statement(tokens);
+  n.add_child(statement);
+  n
 }
 
 // <statement> ::= "do" <statement> "while" "(" <exp> ")" ";"
