@@ -198,6 +198,8 @@ fn parse_for_statement(tokens: &mut Vec<Token>) -> Node<String> {
   n.add_child(post_expression);
   let token = get_next_token(tokens);
   check_type(&TokenType::CParen, &token);
+  let statement = parse_compound_statement(tokens);
+  n.add_child(statement);
   n
 }
 
