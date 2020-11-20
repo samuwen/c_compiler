@@ -93,6 +93,9 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Node<String> {
     TokenType::OBrace => parse_compound_statement(tokens),
     TokenType::ForKeyword => parse_for_statement(tokens),
     TokenType::WhileKeyword => parse_while_statement(tokens),
+    TokenType::DoKeyword => parse_do_statement(tokens),
+    TokenType::BreakKeyword => parse_break_statement(tokens),
+    TokenType::ContinueKeyword => parse_continue_statement(tokens),
     _ => parse_expression_statement(tokens),
   }
 }
@@ -110,7 +113,6 @@ fn parse_return_statement(tokens: &mut Vec<Token>) -> Node<String> {
 
 // <statement> ::= <exp-option> ";"
 fn parse_expression_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  let next = peek_next_token(tokens);
   let statement = parse_exp_option(tokens);
   let token = get_next_token(tokens);
   check_type(&TokenType::Semicolon, &token);
@@ -217,17 +219,40 @@ fn parse_while_statement(tokens: &mut Vec<Token>) -> Node<String> {
 
 // <statement> ::= "do" <statement> "while" "(" <exp> ")" ";"
 fn parse_do_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  todo!();
+  let mut n = Node::new(NodeType::DoStatement);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::DoKeyword, &token);
+  let statement = parse_statement(tokens);
+  n.add_child(statement);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::WhileKeyword, &token);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::OParen, &token);
+  let expression = parse_comma_expression(tokens);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::CParen, &token);
+  n.add_child(expression);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::Semicolon, &token);
+  n
 }
 
 // <statement> ::= "break" ";"
 fn parse_break_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  todo!();
+  let token = get_next_token(tokens);
+  check_type(&TokenType::BreakKeyword, &token);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::Semicolon, &token);
+  Node::new(NodeType::BreakStatement)
 }
 
 // <statement> ::= "continue" ";"
 fn parse_continue_statement(tokens: &mut Vec<Token>) -> Node<String> {
-  todo!();
+  let token = get_next_token(tokens);
+  check_type(&TokenType::ContinueKeyword, &token);
+  let token = get_next_token(tokens);
+  check_type(&TokenType::Semicolon, &token);
+  Node::new(NodeType::ContinueStatement)
 }
 
 fn parse_exp_option(tokens: &mut Vec<Token>) -> Node<String> {
