@@ -119,6 +119,13 @@ impl Token {
     }
   }
 
+  pub fn is_prefix(&self) -> bool {
+    match self.get_type() {
+      TokenType::PreIncrement | TokenType::PreDecrement => true,
+      _ => false,
+    }
+  }
+
   pub fn is_postfix(&self) -> bool {
     match self.get_type() {
       TokenType::PostIncrement | TokenType::PostDecrement => true,

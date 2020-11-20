@@ -115,8 +115,16 @@ impl Node<String> {
         }
       }
     }
+    // kinda hacky but deallocate memory BEFORE the jmp
+    let index = match out_vec.get(out_vec.len() - 1).unwrap().contains("jmp end") {
+      true => out_vec.len() - 2,
+      false => out_vec.len() - 1,
+    };
     let b_to_dealloc = 4 * map.vec.len();
-    out_vec.push(format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc));
+    out_vec.insert(
+      index,
+      format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc),
+    );
   }
 
   fn has_return_statement(&self) -> bool {
@@ -140,6 +148,8 @@ impl Node<String> {
       }
       NodeType::IfStatement => self.generate_if_statement_asm(out_vec, var_map),
       NodeType::CompoundStatement => self.generate_block(out_vec, Some(var_map.clone())),
+      NodeType::NullStatement => (),
+      NodeType::WhileStatement => self.generate_while_statement_asm(out_vec, var_map),
       _ => panic!("Unexpected node type: {:?}", self.get_type()),
     }
   }
@@ -156,6 +166,56 @@ impl Node<String> {
     map.add_var(var_name.to_owned());
     trace!("{:?}", map);
     map
+  }
+
+  fn generate_if_statement_asm(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
+    let label1 = get_next_label();
+    let label2 = get_next_label();
+    let sep = get_separator();
+    let mut condition = self.children.remove(0);
+    match condition.get_type() {
+      NodeType::BinaryOp => condition.generate_binary_op_asm(out_vec, var_map),
+      NodeType::Integer => condition.generate_integer_asm(out_vec),
+      NodeType::Variable => condition.generate_variable_asm(out_vec, var_map),
+      _ => panic!(
+        "Unexpected condition type for if statement: {:?}",
+        condition.get_type()
+      ),
+    }
+    out_vec.push(format!("{}cmpl\t$0, %eax", sep));
+    out_vec.push(format!("{}je\t{}", sep, label1));
+    let mut true_block = self.children.remove(0);
+    true_block.generate_statement_asm(out_vec, var_map);
+    out_vec.push(format!("{}jmp\t{}", sep, label2));
+    out_vec.push(format!("{}:", label1));
+    if self.children.len() > 0 {
+      let mut false_block = self.children.remove(0);
+      false_block.generate_statement_asm(out_vec, var_map);
+    }
+    out_vec.push(format!("{}:", label2));
+  }
+
+  fn generate_while_statement_asm(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
+    let label1 = get_next_label();
+    let label2 = get_next_label();
+    let sep = get_separator();
+    out_vec.push(format!("{}:", label1));
+    let mut expression = self.children.remove(0);
+    match expression.get_type() {
+      NodeType::BinaryOp => expression.generate_binary_op_asm(out_vec, var_map),
+      NodeType::Integer => expression.generate_integer_asm(out_vec),
+      NodeType::Variable => expression.generate_variable_asm(out_vec, var_map),
+      _ => panic!(
+        "Unexpected expression type for while statement: {:?}",
+        expression.get_type()
+      ),
+    }
+    out_vec.push(format!("{}cmpl\t$0, %eax", sep));
+    out_vec.push(format!("{}je\t{}", sep, label2));
+    let mut statement = self.children.remove(0);
+    statement.generate_statement_asm(out_vec, var_map);
+    out_vec.push(format!("{}jmp\t{}", sep, label1));
+    out_vec.push(format!("{}:", label2));
   }
 
   fn handle_statement_children(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
@@ -383,30 +443,6 @@ impl Node<String> {
     out_vec.push(format!("{}:", label2));
   }
 
-  fn generate_if_statement_asm(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
-    let label1 = get_next_label();
-    let label2 = get_next_label();
-    let sep = get_separator();
-    let mut condition = self.children.remove(0);
-    match condition.get_type() {
-      NodeType::BinaryOp => condition.generate_binary_op_asm(out_vec, var_map),
-      NodeType::Integer => condition.generate_integer_asm(out_vec),
-      NodeType::Variable => condition.generate_variable_asm(out_vec, var_map),
-      _ => panic!("Expected BinOp or Int, got {:?}", condition.get_type()),
-    }
-    out_vec.push(format!("{}cmpl\t$0, %eax", sep));
-    out_vec.push(format!("{}je\t{}", sep, label1));
-    let mut true_block = self.children.remove(0);
-    true_block.generate_statement_asm(out_vec, var_map);
-    out_vec.push(format!("{}jmp\t{}", sep, label2));
-    out_vec.push(format!("{}:", label1));
-    if self.children.len() > 0 {
-      let mut false_block = self.children.remove(0);
-      false_block.generate_statement_asm(out_vec, var_map);
-    }
-    out_vec.push(format!("{}:", label2));
-  }
-
   fn generate_child_asm(
     &self,
     mut child: Node<String>,
@@ -485,7 +521,12 @@ impl Node<String> {
       NodeType::IfStatement
       | NodeType::ReturnStatement
       | NodeType::ExpressionStatement
-      | NodeType::CompoundStatement => true,
+      | NodeType::CompoundStatement
+      | NodeType::NullStatement
+      | NodeType::WhileStatement
+      | NodeType::DoStatement
+      | NodeType::ForStatement
+      | NodeType::ForDeclStatement => true,
       _ => false,
     }
   }

@@ -295,6 +295,9 @@ fn parse_assignment_expression(tokens: &mut Vec<Token>) -> Node<String> {
       true => {
         let mut unary_op = Node::new(NodeType::UnaryOp);
         unary_op.add_data(op_token.get_type().to_string());
+        let mut variable = Node::new(NodeType::Variable);
+        variable.add_data(or_exp.get_data().get(0).unwrap().to_owned());
+        unary_op.add_child(variable);
         assignment.add_child(unary_op);
       }
       false => {
@@ -527,8 +530,18 @@ fn parse_unary_op(tokens: &mut Vec<Token>) -> Node<String> {
   let mut node = Node::new(NodeType::UnaryOp);
   let operator_token = get_next_token(tokens);
   node.add_data(operator_token.get_value());
-  let expression = parse_logical_or_expression(tokens);
+  let expression = parse_comma_expression(tokens);
+  let data = expression.get_data().get(0).unwrap().to_owned();
   node.add_child(expression);
+  let node = match operator_token.is_prefix() {
+    true => {
+      let mut assignment = Node::new(NodeType::Assignment);
+      assignment.add_child(node);
+      assignment.add_data(data);
+      assignment
+    }
+    false => node,
+  };
   node
 }
 
