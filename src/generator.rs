@@ -172,10 +172,13 @@ impl Node<String> {
   }
 
   fn generate_if_statement_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
+    let start_label = get_next_label();
+    let end_label = get_next_label();
     let sep = get_separator();
     let mut condition = self.children.remove(0);
     match condition.get_type() {
       NodeType::BinaryOp => condition.generate_binary_op_asm(out_vec, scope),
+      NodeType::UnaryOp => condition.generate_unary_op_asm(out_vec, scope),
       NodeType::Integer => condition.generate_integer_asm(out_vec),
       NodeType::Variable => condition.generate_variable_asm(out_vec, scope),
       _ => panic!(
@@ -184,21 +187,23 @@ impl Node<String> {
       ),
     }
     out_vec.push(format!("{}cmpl\t$0, %eax", sep));
-    out_vec.push(format!("{}je\t{}", sep, scope.get_start_label()));
+    out_vec.push(format!("{}je\t{}", sep, start_label));
     let mut true_block = self.children.remove(0);
-    true_block.generate_statement_asm(out_vec, scope);
-    out_vec.push(format!("{}jmp\t{}", sep, scope.get_end_label()));
-    out_vec.push(format!("{}:", scope.get_start_label()));
+    true_block.generate_block(out_vec, Some(scope.clone()));
+    out_vec.push(format!("{}jmp\t{}", sep, end_label));
+    out_vec.push(format!("{}:", start_label));
     if self.children.len() > 0 {
       let mut false_block = self.children.remove(0);
-      false_block.generate_statement_asm(out_vec, scope);
+      false_block.generate_block(out_vec, Some(scope.clone()));
     }
-    out_vec.push(format!("{}:", scope.get_end_label()));
+    out_vec.push(format!("{}:", end_label));
   }
 
   fn generate_while_statement_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
+    let start_label = get_next_label();
+    let end_label = get_next_label();
     let sep = get_separator();
-    out_vec.push(format!("{}:", scope.get_start_label()));
+    out_vec.push(format!("{}:", start_label));
     let mut expression = self.children.remove(0);
     match expression.get_type() {
       NodeType::BinaryOp => expression.generate_binary_op_asm(out_vec, scope),
@@ -210,16 +215,18 @@ impl Node<String> {
       ),
     }
     out_vec.push(format!("{}cmpl\t$0, %eax", sep));
-    out_vec.push(format!("{}je\t{}", sep, scope.get_end_label()));
+    out_vec.push(format!("{}je\t{}", sep, end_label));
     let mut statement = self.children.remove(0);
     statement.generate_statement_asm(out_vec, scope);
-    out_vec.push(format!("{}jmp\t{}", sep, scope.get_start_label()));
-    out_vec.push(format!("{}:", scope.get_end_label()));
+    out_vec.push(format!("{}jmp\t{}", sep, start_label));
+    out_vec.push(format!("{}:", end_label));
   }
 
   fn generate_do_statement_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
+    let start_label = get_next_label();
+    let end_label = get_next_label();
     let sep = get_separator();
-    out_vec.push(format!("{}:", scope.get_start_label()));
+    out_vec.push(format!("{}:", start_label));
     let mut statement = self.children.remove(0);
     statement.generate_statement_asm(out_vec, scope);
     let mut expression = self.children.remove(0);
@@ -233,45 +240,49 @@ impl Node<String> {
       ),
     }
     out_vec.push(format!("{}cmpl\t$0, %eax", sep));
-    out_vec.push(format!("{}je\t{}", sep, scope.get_end_label()));
-    out_vec.push(format!("{}jmp\t{}", sep, scope.get_start_label()));
-    out_vec.push(format!("{}:", scope.get_end_label()));
+    out_vec.push(format!("{}je\t{}", sep, end_label));
+    out_vec.push(format!("{}jmp\t{}", sep, start_label));
+    out_vec.push(format!("{}:", end_label));
   }
 
   fn generate_for_statement_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
+    let start_label = get_next_label();
+    let end_label = get_next_label();
     let sep = get_separator();
     let mut init = self.children.remove(0);
     init.generate_statement_asm(out_vec, scope);
     let mut condition = self.children.remove(0);
-    out_vec.push(format!("{}:", scope.get_start_label()));
+    out_vec.push(format!("{}:", start_label));
     condition.generate_statement_asm(out_vec, scope);
     out_vec.push(format!("{}cmpl\t$0, %eax", sep));
-    out_vec.push(format!("{}je\t{}", sep, scope.get_end_label()));
+    out_vec.push(format!("{}je\t{}", sep, end_label));
     let mut post_expression = self.children.remove(0);
     let mut statement = self.children.remove(0);
     statement.generate_statement_asm(out_vec, scope);
     post_expression.generate_statement_asm(out_vec, scope);
     let b_to_dealloc = 4 * scope.vec.len();
     out_vec.push(format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc));
-    out_vec.push(format!("{}jmp\t{}", sep, scope.get_start_label()));
-    out_vec.push(format!("{}:", scope.get_end_label()));
+    out_vec.push(format!("{}jmp\t{}", sep, start_label));
+    out_vec.push(format!("{}:", end_label));
   }
 
   fn generate_for_decl_statement_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
+    let start_label = get_next_label();
+    let end_label = get_next_label();
     let sep = get_separator();
     let mut init = self.children.remove(0);
     init.generate_block_item_asm(out_vec, scope.clone());
     let mut condition = self.children.remove(0);
-    out_vec.push(format!("{}:", scope.get_start_label()));
+    out_vec.push(format!("{}:", start_label));
     condition.generate_statement_asm(out_vec, &scope);
     out_vec.push(format!("{}cmpl\t$0, %eax", sep));
-    out_vec.push(format!("{}je\t{}", sep, scope.get_end_label()));
+    out_vec.push(format!("{}je\t{}", sep, end_label));
     let mut post_expression = self.children.remove(0);
     let mut statement = self.children.remove(0);
     statement.generate_statement_asm(out_vec, &scope);
     post_expression.generate_statement_asm(out_vec, &scope);
-    out_vec.push(format!("{}jmp\t{}", sep, scope.get_start_label()));
-    out_vec.push(format!("{}:", scope.get_end_label()));
+    out_vec.push(format!("{}jmp\t{}", sep, start_label));
+    out_vec.push(format!("{}:", end_label));
   }
 
   fn handle_statement_children(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
@@ -370,29 +381,33 @@ impl Node<String> {
         out_vec.push(format!("{}setge\t%al", sep));
       }
       "&&" => {
+        let start_label = get_next_label();
+        let end_label = get_next_label();
         self.generate_child_asm(child1, out_vec, scope);
         out_vec.push(format!("{}cmpl\t$0, %eax", sep));
-        out_vec.push(format!("{}jne\t{}", sep, scope.get_start_label()));
-        out_vec.push(format!("{}jmp\t{}", sep, scope.get_end_label()));
-        out_vec.push(format!("{}:", scope.get_start_label()));
+        out_vec.push(format!("{}jne\t{}", sep, start_label));
+        out_vec.push(format!("{}jmp\t{}", sep, end_label));
+        out_vec.push(format!("{}:", start_label));
         self.generate_child_asm(child2, out_vec, scope);
         out_vec.push(format!("{}cmpl\t$0, %eax", sep));
         out_vec.push(format!("{}movl\t$0, %eax", sep));
         out_vec.push(format!("{}setne\t%al", sep));
-        out_vec.push(format!("{}:", scope.get_end_label()));
+        out_vec.push(format!("{}:", end_label));
       }
       "||" => {
+        let start_label = get_next_label();
+        let end_label = get_next_label();
         self.generate_child_asm(child1, out_vec, scope);
         out_vec.push(format!("{}cmpl\t$0, %eax", sep));
-        out_vec.push(format!("{}je\t{}", sep, scope.get_start_label()));
+        out_vec.push(format!("{}je\t{}", sep, start_label));
         out_vec.push(format!("{}movl\t$1, %eax", sep));
-        out_vec.push(format!("{}jmp\t{}", sep, scope.get_end_label()));
-        out_vec.push(format!("{}:", scope.get_start_label()));
+        out_vec.push(format!("{}jmp\t{}", sep, end_label));
+        out_vec.push(format!("{}:", start_label));
         self.generate_child_asm(child2, out_vec, scope);
         out_vec.push(format!("{}cmpl\t$0, %eax", sep));
         out_vec.push(format!("{}movl\t$0, %eax", sep));
         out_vec.push(format!("{}setne\t%al", sep));
-        out_vec.push(format!("{}:", scope.get_end_label()));
+        out_vec.push(format!("{}:", end_label));
       }
       "%" => {
         self.generate_reverse_op_setup(child1, child2, out_vec, scope);
@@ -460,6 +475,8 @@ impl Node<String> {
   }
 
   fn generate_conditional_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
+    let start_label = get_next_label();
+    let end_label = get_next_label();
     let sep = get_separator();
     let mut child1 = self.children.remove(0);
     match child1.get_type() {
@@ -469,7 +486,7 @@ impl Node<String> {
       _ => panic!("Expected BinOp or Int, got {:?}", child1.get_type()),
     }
     out_vec.push(format!("{}cmpl\t$0, %eax", sep));
-    out_vec.push(format!("{}je\t{}", sep, scope.get_start_label()));
+    out_vec.push(format!("{}je\t{}", sep, start_label));
     let mut child2 = self.children.remove(0);
     match child2.get_type() {
       NodeType::BinaryOp => child2.generate_binary_op_asm(out_vec, scope),
@@ -481,8 +498,8 @@ impl Node<String> {
         child2.get_type()
       ),
     }
-    out_vec.push(format!("{}jmp\t{}", sep, scope.get_end_label()));
-    out_vec.push(format!("{}:", scope.get_start_label()));
+    out_vec.push(format!("{}jmp\t{}", sep, end_label));
+    out_vec.push(format!("{}:", start_label));
     let mut child3 = self.children.remove(0);
     match child3.get_type() {
       NodeType::Integer => child3.generate_integer_asm(out_vec),
@@ -490,7 +507,7 @@ impl Node<String> {
       NodeType::Assignment => child3.generate_assignment_asm(out_vec, scope),
       _ => panic!("Expected Int, got {:?}", child3.get_type()),
     }
-    out_vec.push(format!("{}:", scope.get_end_label()));
+    out_vec.push(format!("{}:", end_label));
   }
 
   fn generate_child_asm(&self, mut child: Node<String>, out_vec: &mut Vec<String>, scope: &Scope) {
