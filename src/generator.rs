@@ -78,13 +78,14 @@ impl Node<String> {
     let sep = get_separator();
     out_vec.push(format!("{}pushl\t%ebp", sep));
     out_vec.push(format!("{}movl\t%esp, %ebp", sep));
+    self.generate_block(out_vec, None);
     let has_return = self.has_return_statement();
     // C supports int function with no return statement. In that event, they return 0
-    match has_return {
-      true => self.generate_block(out_vec, None),
-      false => {
+    match !has_return {
+      true => {
         out_vec.push(format!("{}movl\t$0, %eax", sep));
       }
+      false => (),
     }
     let sep = get_separator();
     out_vec.push(format!("end:"));
