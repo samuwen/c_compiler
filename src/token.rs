@@ -204,6 +204,22 @@ impl PartialEq for Token {
   }
 }
 
+impl fmt::Display for Token {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let max_len = "GreaterThanOrEqual".len();
+    let my_len = self.token_type.to_string().len();
+    let mut sep = String::new();
+    for _ in 0..max_len - my_len {
+      sep.push_str(" ");
+    }
+    write!(
+      f,
+      "type: {},{}\tcolumn: {}",
+      self.token_type, sep, self.column
+    )
+  }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TokenType {
   OBrace,

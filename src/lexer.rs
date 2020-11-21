@@ -77,13 +77,12 @@ pub fn lex(f: String) -> Vec<Token> {
     TokenType::ContinueKeyword,
   ));
   total.sort();
-  debug!("{:?}", total);
   total
 }
 
 fn get_tokens_default_string(f: &String, operator: TokenType) -> Vec<Token> {
   let string = format!(
-    "(?<=[a-zA-Z|0-9\\s]){}(?=[a-zA-Z|0-9/\\s])",
+    "(?<=[a-zA-Z|0-9\\s\\(\\)]){}(?=[a-zA-Z|0-9/\\s\\(\\)])",
     operator.to_regex()
   );
   find_tokens(f, &string, operator)

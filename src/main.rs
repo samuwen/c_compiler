@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 use token::{Token, TokenType};
 
 const ASSEMBLY_FILE_NAME: &str = "src/out/assembly.s";
+const LEX_FILE_NAME: &str = "src/out/lex.out";
 
 fn main() {
   Logger::with_env_or_str("debug")
@@ -26,6 +27,11 @@ fn main() {
   let file = read_to_string(&args[1]).expect("File not found");
   let lex_start = Instant::now();
   let tokens = lex(file);
+  let mut lex_out: Vec<String> = vec![];
+  for token in tokens.iter() {
+    lex_out.push(format!("{}", token));
+  }
+  write(LEX_FILE_NAME, lex_out.join("\n")).expect("Failed to write output file");
   let lex_end = Instant::now();
   let lex_dur = lex_end.duration_since(lex_start);
   let parse_start = Instant::now();
@@ -36,7 +42,7 @@ fn main() {
   let generated = generate(parsed);
   let generate_end = Instant::now();
   let generate_dur = generate_end.duration_since(generate_start);
-  debug!("{}", generated);
+  info!("{}", generated);
   write(ASSEMBLY_FILE_NAME, &generated).expect("Failed to write output file");
   let output = Command::new("gcc")
     .args(&["-m32", ASSEMBLY_FILE_NAME, "-o", "out"])
@@ -44,11 +50,11 @@ fn main() {
     .expect("GCC failed to run");
   if output.status.success() {
     debug!("File successfully linked");
-    let delete_result = Command::new("rm")
-      .arg(ASSEMBLY_FILE_NAME)
-      .output()
-      .expect("Failed to delete file");
-    trace!("delete: {}", delete_result.status);
+  // let delete_result = Command::new("rm")
+  //   .arg(ASSEMBLY_FILE_NAME)
+  //   .output()
+  //   .expect("Failed to delete file");
+  // trace!("delete: {}", delete_result.status);
   } else {
     panic!("GCC failed to compile");
   }

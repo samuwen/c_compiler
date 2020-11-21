@@ -15,7 +15,7 @@ fn get_next_label() -> String {
 fn get_separator() -> String {
   let mut ret_string = String::new();
   for _ in 0..WS_COUNT.load(Ordering::Relaxed) {
-    ret_string.push_str("  ");
+    ret_string.push_str("\t");
   }
   ret_string
 }
@@ -101,10 +101,7 @@ impl Node<String> {
     };
     trace!("{:?}", map);
     let map = self.generate_block_item_asm(out_vec, map);
-    let b_to_dealloc = 4 * map.vec.len();
-    if !out_vec.last().unwrap().contains("jmp end") && b_to_dealloc > 0 {
-      out_vec.push(format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc));
-    }
+    self.deallocate_bytes(out_vec, &map);
     WS_COUNT.fetch_sub(1, Ordering::Relaxed);
   }
 
@@ -137,10 +134,7 @@ impl Node<String> {
     match self.get_type() {
       NodeType::ReturnStatement => {
         self.handle_statement_children(out_vec, scope);
-        let b_to_dealloc = 4 * scope.vec.len();
-        if b_to_dealloc > 0 {
-          out_vec.push(format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc));
-        }
+        self.deallocate_bytes(out_vec, scope);
         out_vec.push(format!("{}jmp end", get_separator()));
       }
       NodeType::ExpressionStatement => {
@@ -289,6 +283,8 @@ impl Node<String> {
     post_expression.generate_statement_asm(out_vec, &scope);
     out_vec.push(format!("{}jmp\t{}", sep, start_label));
     out_vec.push(format!("{}:", end_label));
+    // if we declared any vars in the loop scope
+    self.deallocate_bytes(out_vec, &scope);
   }
 
   fn generate_break_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
@@ -486,6 +482,7 @@ impl Node<String> {
   fn generate_variable_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
     let var_name = self.data.remove(0);
     let offset = scope.get_var(&var_name);
+    trace!("Accessing: {} at {}", var_name, offset);
     out_vec.push(format!("{}movl\t{}(%ebp), %eax", get_separator(), offset));
   }
 
@@ -609,6 +606,14 @@ impl Node<String> {
       _ => false,
     }
   }
+
+  fn deallocate_bytes(&self, out_vec: &mut Vec<String>, map: &Scope) {
+    let b_to_dealloc = 4 * map.vec.len();
+    if !out_vec.last().unwrap().contains("jmp end") && b_to_dealloc > 0 {
+      trace!("Deallocating: {} bytes", b_to_dealloc);
+      out_vec.push(format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc));
+    }
+  }
 }
 
 impl fmt::Display for Node<String> {
@@ -677,6 +682,7 @@ impl Scope {
     trace!("Attempting to add variable '{}' to map", name);
     match self.vec.contains(&name) {
       false => {
+        trace!("Adding: {} at {}", name, self.stack_index);
         self.map.insert(name.to_owned(), self.stack_index);
         self.vec.push(name);
         self.stack_index -= 4;
