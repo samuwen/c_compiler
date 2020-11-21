@@ -55,7 +55,7 @@ fn main() {
   let run_output = Command::new("./out")
     .output()
     .expect("Failed to run program");
-  debug!("program run: {}", run_output.status);
+  debug!("program run: {},", run_output.status);
   let print_durs = |dur: Duration, name| {
     warn!("{} took {} microseconds", name, dur.as_micros());
   };

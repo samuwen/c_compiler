@@ -100,10 +100,14 @@ impl Node<String> {
       None => Scope::new(),
     };
     trace!("{:?}", map);
-    self.generate_block_item_asm(out_vec, map);
+    let map = self.generate_block_item_asm(out_vec, map);
+    let b_to_dealloc = 4 * map.vec.len();
+    if !out_vec.last().unwrap().contains("jmp end") && b_to_dealloc > 0 {
+      out_vec.push(format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc));
+    }
   }
 
-  fn generate_block_item_asm(&mut self, out_vec: &mut Vec<String>, scope: Scope) {
+  fn generate_block_item_asm(&mut self, out_vec: &mut Vec<String>, scope: Scope) -> Scope {
     let mut map = scope;
     for child in self.children.iter_mut() {
       match child.is_statement() {
@@ -115,16 +119,7 @@ impl Node<String> {
         }
       }
     }
-    // kinda hacky but deallocate memory BEFORE the jmp
-    let index = match out_vec.get(out_vec.len() - 1).unwrap().contains("jmp end") {
-      true => out_vec.len() - 2,
-      false => out_vec.len() - 1,
-    };
-    let b_to_dealloc = 4 * map.vec.len();
-    out_vec.insert(
-      index,
-      format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc),
-    );
+    map
   }
 
   fn has_return_statement(&self) -> bool {
@@ -141,6 +136,10 @@ impl Node<String> {
     match self.get_type() {
       NodeType::ReturnStatement => {
         self.handle_statement_children(out_vec, scope);
+        let b_to_dealloc = 4 * scope.vec.len();
+        if b_to_dealloc > 0 {
+          out_vec.push(format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc));
+        }
         out_vec.push(format!("{}jmp end", get_separator()));
       }
       NodeType::ExpressionStatement => {
