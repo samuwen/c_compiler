@@ -152,6 +152,7 @@ impl Node<String> {
       NodeType::WhileStatement => self.generate_while_statement_asm(out_vec, var_map),
       NodeType::DoStatement => self.generate_do_statement_asm(out_vec, var_map),
       NodeType::ForStatement => self.generate_for_statement_asm(out_vec, var_map),
+      NodeType::ForDeclStatement => self.generate_for_decl_statement_asm(out_vec, var_map),
       _ => panic!("Unexpected node type: {:?}", self.get_type()),
     }
   }
@@ -258,6 +259,27 @@ impl Node<String> {
     let mut statement = self.children.remove(0);
     statement.generate_statement_asm(out_vec, var_map);
     post_expression.generate_statement_asm(out_vec, var_map);
+    let b_to_dealloc = 4 * var_map.vec.len();
+    out_vec.push(format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc));
+    out_vec.push(format!("{}jmp\t{}", sep, condition_label));
+    out_vec.push(format!("{}:", end_label));
+  }
+
+  fn generate_for_decl_statement_asm(&mut self, out_vec: &mut Vec<String>, var_map: &VarMap) {
+    let condition_label = get_next_label();
+    let end_label = get_next_label();
+    let sep = get_separator();
+    let mut init = self.children.remove(0);
+    init.generate_block_item_asm(out_vec, var_map.clone());
+    let mut condition = self.children.remove(0);
+    out_vec.push(format!("{}:", condition_label));
+    condition.generate_statement_asm(out_vec, &var_map);
+    out_vec.push(format!("{}cmpl\t$0, %eax", sep));
+    out_vec.push(format!("{}je\t{}", sep, end_label));
+    let mut post_expression = self.children.remove(0);
+    let mut statement = self.children.remove(0);
+    statement.generate_statement_asm(out_vec, &var_map);
+    post_expression.generate_statement_asm(out_vec, &var_map);
     out_vec.push(format!("{}jmp\t{}", sep, condition_label));
     out_vec.push(format!("{}:", end_label));
   }
