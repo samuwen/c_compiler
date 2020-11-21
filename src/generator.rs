@@ -5,7 +5,7 @@ use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::vec::Vec;
 
-static WS_COUNT: AtomicUsize = AtomicUsize::new(0);
+static WS_COUNT: AtomicUsize = AtomicUsize::new(1);
 static LB_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 fn get_next_label() -> String {
@@ -75,7 +75,6 @@ impl Node<String> {
     let name = self.data.get(0).unwrap();
     out_vec.push(format!(".globl {}", name));
     out_vec.push(format!("{}:", name));
-    WS_COUNT.fetch_add(1, Ordering::Relaxed);
     let sep = get_separator();
     out_vec.push(format!("{}pushl\t%ebp", sep));
     out_vec.push(format!("{}movl\t%esp, %ebp", sep));
@@ -95,8 +94,9 @@ impl Node<String> {
   }
 
   fn generate_block(&mut self, out_vec: &mut Vec<String>, scope: Option<Scope>) {
+    WS_COUNT.fetch_add(1, Ordering::Relaxed);
     let map = match scope {
-      Some(map) => Scope::from(map),
+      Some(map) => Scope::from(&map),
       None => Scope::new(),
     };
     trace!("{:?}", map);
@@ -105,6 +105,7 @@ impl Node<String> {
     if !out_vec.last().unwrap().contains("jmp end") && b_to_dealloc > 0 {
       out_vec.push(format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc));
     }
+    WS_COUNT.fetch_sub(1, Ordering::Relaxed);
   }
 
   fn generate_block_item_asm(&mut self, out_vec: &mut Vec<String>, scope: Scope) -> Scope {
@@ -146,12 +147,15 @@ impl Node<String> {
         self.handle_statement_children(out_vec, scope);
       }
       NodeType::IfStatement => self.generate_if_statement_asm(out_vec, scope),
-      NodeType::CompoundStatement => self.generate_block(out_vec, Some(scope.clone())),
+      NodeType::CompoundStatement => self.generate_block(out_vec, Some(Scope::from(scope))),
       NodeType::NullStatement => (),
       NodeType::WhileStatement => self.generate_while_statement_asm(out_vec, scope),
       NodeType::DoStatement => self.generate_do_statement_asm(out_vec, scope),
-      NodeType::ForStatement => self.generate_for_statement_asm(out_vec, scope),
-      NodeType::ForDeclStatement => self.generate_for_decl_statement_asm(out_vec, scope),
+      NodeType::ForStatement | NodeType::ForDeclStatement => {
+        self.generate_for_statement_asm(out_vec, scope)
+      }
+      NodeType::BreakStatement => self.generate_break_asm(out_vec, scope),
+      NodeType::ContinueStatement => self.generate_continue_asm(out_vec, scope),
       _ => panic!("Unexpected node type: {:?}", self.get_type()),
     }
   }
@@ -187,27 +191,32 @@ impl Node<String> {
     }
     out_vec.push(format!("{}cmpl\t$0, %eax", sep));
     out_vec.push(format!("{}je\t{}", sep, start_label));
-    let mut true_block = self.children.remove(0);
-    true_block.generate_block(out_vec, Some(scope.clone()));
+    let sep = get_separator();
+    let mut true_statement = self.children.remove(0);
+    true_statement.generate_statement_asm(out_vec, scope);
     out_vec.push(format!("{}jmp\t{}", sep, end_label));
     out_vec.push(format!("{}:", start_label));
     if self.children.len() > 0 {
-      let mut false_block = self.children.remove(0);
-      false_block.generate_block(out_vec, Some(scope.clone()));
+      let mut false_statement = self.children.remove(0);
+      false_statement.generate_statement_asm(out_vec, scope);
     }
     out_vec.push(format!("{}:", end_label));
   }
 
   fn generate_while_statement_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
     let start_label = get_next_label();
+    let post_exp_label = get_next_label();
     let end_label = get_next_label();
+    let mut scope = Scope::from(scope);
+    scope.set_exp_label(&post_exp_label);
+    scope.set_end_label(&end_label);
     let sep = get_separator();
     out_vec.push(format!("{}:", start_label));
     let mut expression = self.children.remove(0);
     match expression.get_type() {
-      NodeType::BinaryOp => expression.generate_binary_op_asm(out_vec, scope),
+      NodeType::BinaryOp => expression.generate_binary_op_asm(out_vec, &scope),
       NodeType::Integer => expression.generate_integer_asm(out_vec),
-      NodeType::Variable => expression.generate_variable_asm(out_vec, scope),
+      NodeType::Variable => expression.generate_variable_asm(out_vec, &scope),
       _ => panic!(
         "Unexpected expression type for while statement: {:?}",
         expression.get_type()
@@ -216,23 +225,28 @@ impl Node<String> {
     out_vec.push(format!("{}cmpl\t$0, %eax", sep));
     out_vec.push(format!("{}je\t{}", sep, end_label));
     let mut statement = self.children.remove(0);
-    statement.generate_statement_asm(out_vec, scope);
+    statement.generate_statement_asm(out_vec, &scope);
+    out_vec.push(format!("{}:", post_exp_label));
     out_vec.push(format!("{}jmp\t{}", sep, start_label));
     out_vec.push(format!("{}:", end_label));
   }
 
   fn generate_do_statement_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
     let start_label = get_next_label();
+    let post_exp_label = get_next_label();
     let end_label = get_next_label();
+    let mut scope = Scope::from(scope);
+    scope.set_exp_label(&post_exp_label);
+    scope.set_end_label(&end_label);
     let sep = get_separator();
     out_vec.push(format!("{}:", start_label));
     let mut statement = self.children.remove(0);
-    statement.generate_statement_asm(out_vec, scope);
+    statement.generate_statement_asm(out_vec, &scope);
     let mut expression = self.children.remove(0);
     match expression.get_type() {
-      NodeType::BinaryOp => expression.generate_binary_op_asm(out_vec, scope),
+      NodeType::BinaryOp => expression.generate_binary_op_asm(out_vec, &scope),
       NodeType::Integer => expression.generate_integer_asm(out_vec),
-      NodeType::Variable => expression.generate_variable_asm(out_vec, scope),
+      NodeType::Variable => expression.generate_variable_asm(out_vec, &scope),
       _ => panic!(
         "Unexpected expression type for while statement: {:?}",
         expression.get_type()
@@ -240,35 +254,29 @@ impl Node<String> {
     }
     out_vec.push(format!("{}cmpl\t$0, %eax", sep));
     out_vec.push(format!("{}je\t{}", sep, end_label));
+    out_vec.push(format!("{}:", post_exp_label));
     out_vec.push(format!("{}jmp\t{}", sep, start_label));
     out_vec.push(format!("{}:", end_label));
   }
 
   fn generate_for_statement_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
     let start_label = get_next_label();
+    let post_exp_label = get_next_label();
     let end_label = get_next_label();
+    let mut scope = Scope::from(scope);
+    scope.set_exp_label(&post_exp_label);
+    scope.set_end_label(&end_label);
     let sep = get_separator();
     let mut init = self.children.remove(0);
-    init.generate_statement_asm(out_vec, scope);
-    let mut condition = self.children.remove(0);
-    out_vec.push(format!("{}:", start_label));
-    condition.generate_statement_asm(out_vec, scope);
-    out_vec.push(format!("{}cmpl\t$0, %eax", sep));
-    out_vec.push(format!("{}je\t{}", sep, end_label));
-    let mut post_expression = self.children.remove(0);
-    let mut statement = self.children.remove(0);
-    statement.generate_statement_asm(out_vec, scope);
-    post_expression.generate_statement_asm(out_vec, scope);
-    out_vec.push(format!("{}jmp\t{}", sep, start_label));
-    out_vec.push(format!("{}:", end_label));
-  }
-
-  fn generate_for_decl_statement_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
-    let start_label = get_next_label();
-    let end_label = get_next_label();
-    let sep = get_separator();
-    let mut init = self.children.remove(0);
-    let scope = init.generate_declaration_asm(out_vec, scope.clone());
+    match self.get_type() {
+      NodeType::ForStatement => {
+        init.generate_statement_asm(out_vec, &scope);
+      }
+      NodeType::ForDeclStatement => {
+        scope = init.generate_declaration_asm(out_vec, Scope::from(&scope));
+      }
+      _ => panic!("Invalid statement in for loop: {:?}", self.get_type()),
+    }
     let mut condition = self.children.remove(0);
     out_vec.push(format!("{}:", start_label));
     condition.generate_statement_asm(out_vec, &scope);
@@ -277,9 +285,19 @@ impl Node<String> {
     let mut post_expression = self.children.remove(0);
     let mut statement = self.children.remove(0);
     statement.generate_statement_asm(out_vec, &scope);
+    out_vec.push(format!("{}:", post_exp_label));
     post_expression.generate_statement_asm(out_vec, &scope);
     out_vec.push(format!("{}jmp\t{}", sep, start_label));
     out_vec.push(format!("{}:", end_label));
+  }
+
+  fn generate_break_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
+    out_vec.push(format!("{}jmp\t{}", get_separator(), scope.get_end_label()));
+  }
+
+  fn generate_continue_asm(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
+    let sep = get_separator();
+    out_vec.push(format!("{}jmp\t{}", sep, scope.get_start_label()));
   }
 
   fn handle_statement_children(&mut self, out_vec: &mut Vec<String>, scope: &Scope) {
@@ -585,7 +603,9 @@ impl Node<String> {
       | NodeType::WhileStatement
       | NodeType::DoStatement
       | NodeType::ForStatement
-      | NodeType::ForDeclStatement => true,
+      | NodeType::ForDeclStatement
+      | NodeType::BreakStatement
+      | NodeType::ContinueStatement => true,
       _ => false,
     }
   }
@@ -621,12 +641,12 @@ pub enum NodeType {
   Conditional,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Scope {
   map: HashMap<String, isize>,
   vec: Vec<String>,
   stack_index: isize,
-  start_label: String,
+  post_exp_label: String,
   end_label: String,
 }
 
@@ -637,19 +657,19 @@ impl Scope {
       map: HashMap::new(),
       vec: Vec::with_capacity(8),
       stack_index: -4,
-      start_label: get_next_label(),
-      end_label: get_next_label(),
+      post_exp_label: String::from(""),
+      end_label: String::from(""),
     }
   }
 
-  fn from(scope: Scope) -> Scope {
+  fn from(scope: &Scope) -> Scope {
     trace!("Cloning map");
     Scope {
-      map: scope.map,
+      map: scope.map.clone(),
       vec: Vec::with_capacity(8),
       stack_index: scope.stack_index,
-      start_label: get_next_label(),
-      end_label: get_next_label(),
+      post_exp_label: scope.post_exp_label.to_owned(),
+      end_label: scope.end_label.to_owned(),
     }
   }
 
@@ -674,10 +694,24 @@ impl Scope {
   }
 
   fn get_start_label(&self) -> &String {
-    &self.start_label
+    match self.post_exp_label.as_ref() {
+      "" => panic!("Tried to get uninitialized start label"),
+      _ => &self.post_exp_label,
+    }
   }
 
   fn get_end_label(&self) -> &String {
-    &self.end_label
+    match self.end_label.as_ref() {
+      "" => panic!("Tried to get uninitialized end label"),
+      _ => &self.end_label,
+    }
+  }
+
+  fn set_exp_label(&mut self, label: &String) {
+    self.post_exp_label = label.to_owned();
+  }
+
+  fn set_end_label(&mut self, label: &String) {
+    self.end_label = label.to_owned();
   }
 }

@@ -185,9 +185,11 @@ fn parse_for_statement(tokens: &mut Vec<Token>) -> Node<String> {
   let controlling_expression = parse_exp_option(tokens);
   let controlling_expression = match controlling_expression.get_type() {
     NodeType::NullStatement => {
+      let mut expression = Node::new(NodeType::ExpressionStatement);
       let mut const_statement = Node::new(NodeType::Integer);
       const_statement.add_data(String::from("1"));
-      const_statement
+      expression.add_child(const_statement);
+      expression
     }
     _ => controlling_expression,
   };
@@ -198,7 +200,7 @@ fn parse_for_statement(tokens: &mut Vec<Token>) -> Node<String> {
   n.add_child(post_expression);
   let token = get_next_token(tokens);
   check_type(&TokenType::CParen, &token);
-  let statement = parse_compound_statement(tokens);
+  let statement = parse_statement(tokens);
   n.add_child(statement);
   n
 }
