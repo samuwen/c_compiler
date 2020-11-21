@@ -259,8 +259,6 @@ impl Node<String> {
     let mut statement = self.children.remove(0);
     statement.generate_statement_asm(out_vec, scope);
     post_expression.generate_statement_asm(out_vec, scope);
-    let b_to_dealloc = 4 * scope.vec.len();
-    out_vec.push(format!("{}addl\t${}, %esp", get_separator(), b_to_dealloc));
     out_vec.push(format!("{}jmp\t{}", sep, start_label));
     out_vec.push(format!("{}:", end_label));
   }
@@ -270,7 +268,7 @@ impl Node<String> {
     let end_label = get_next_label();
     let sep = get_separator();
     let mut init = self.children.remove(0);
-    init.generate_block_item_asm(out_vec, scope.clone());
+    let scope = init.generate_declaration_asm(out_vec, scope.clone());
     let mut condition = self.children.remove(0);
     out_vec.push(format!("{}:", start_label));
     condition.generate_statement_asm(out_vec, &scope);
