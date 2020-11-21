@@ -321,6 +321,67 @@ impl TokenType {
       TokenType::ContinueKeyword => "continue",
     })
   }
+
+  pub fn to_regex(&self) -> String {
+    String::from(match self {
+      TokenType::OBrace => "{",
+      TokenType::CBrace => "}",
+      TokenType::OParen => "\\(",
+      TokenType::CParen => "\\)",
+      TokenType::Semicolon => ";",
+      TokenType::IntKeyword => "int",
+      TokenType::ReturnKeyword => "return",
+      TokenType::Identifier => {
+        "\\b([a-zA-Z_]+)\\b(?<!int|return|if|else|for|do|while|continue|break)"
+      }
+      TokenType::Integer => "[0-9]+",
+      TokenType::Negation => "(?<=\\s)-(?=[0-9|a-zA-Z]|\\s)",
+      TokenType::BitwiseComplement => "~",
+      TokenType::LogicalNegation => "!(?=[0-9|a-zA-Z])",
+      TokenType::Addition => "\\+",
+      TokenType::Multiplication => "\\*",
+      TokenType::Division => "/",
+      TokenType::And => "&&",
+      TokenType::Or => "\\|\\|",
+      TokenType::Equal => "==",
+      TokenType::NotEqual => "!=",
+      TokenType::LessThan => "<",
+      TokenType::LessThanOrEqual => "<=",
+      TokenType::GreaterThan => ">",
+      TokenType::GreaterThanOrEqual => ">=",
+      TokenType::Modulo => "%",
+      TokenType::BitwiseAnd => "&",
+      TokenType::BitwiseOr => "\\|",
+      TokenType::BitwiseXor => "\\^",
+      TokenType::BitwiseShl => "<<",
+      TokenType::BitwiseShr => ">>",
+      TokenType::Assignment => "=",
+      TokenType::AddAssign => "\\+=",
+      TokenType::MulAssign => "\\*=",
+      TokenType::SubAssign => "-=",
+      TokenType::DivAssign => "/=",
+      TokenType::ModAssign => "%=",
+      TokenType::ShlAssign => "<<=",
+      TokenType::ShrAssign => ">>=",
+      TokenType::AndAssign => "&=",
+      TokenType::OrAssign => "\\|=",
+      TokenType::XorAssign => "\\^=",
+      TokenType::PreIncrement => "\\+\\+(?=[0-9|a-zA-Z])",
+      TokenType::PreDecrement => "--(?=[0-9|a-zA-Z])",
+      TokenType::PostIncrement => "(?<=[0-9|a-zA-Z])\\+\\+",
+      TokenType::PostDecrement => "(?<=[0-9|a-zA-Z])--",
+      TokenType::Comma => ",",
+      TokenType::IfKeyword => "if",
+      TokenType::ElseKeyword => "else",
+      TokenType::Colon => ":",
+      TokenType::QuestionMark => "\\?",
+      TokenType::DoKeyword => "do",
+      TokenType::ForKeyword => "for",
+      TokenType::WhileKeyword => "while",
+      TokenType::BreakKeyword => "break",
+      TokenType::ContinueKeyword => "continue",
+    })
+  }
 }
 
 impl fmt::Display for TokenType {

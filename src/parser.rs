@@ -263,7 +263,8 @@ fn parse_exp_option(tokens: &mut Vec<Token>) -> Node<String> {
     TokenType::Semicolon | TokenType::CParen => Node::new(NodeType::NullStatement),
     _ => {
       let mut n = Node::new(NodeType::ExpressionStatement);
-      n.add_child(parse_comma_expression(tokens));
+      let expression = parse_comma_expression(tokens);
+      n.add_child(expression);
       n
     }
   }

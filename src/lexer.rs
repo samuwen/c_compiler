@@ -4,95 +4,93 @@ use onig::{FindMatches, Regex};
 
 pub fn lex(f: String) -> Vec<Token> {
   let mut total = Vec::with_capacity(f.len());
-  total.append(&mut find_tokens(&f, "{", TokenType::OBrace));
-  total.append(&mut find_tokens(&f, "}", TokenType::CBrace));
-  total.append(&mut find_tokens(&f, "\\(", TokenType::OParen));
-  total.append(&mut find_tokens(&f, "\\)", TokenType::CParen));
-  total.append(&mut find_tokens(&f, ";", TokenType::Semicolon));
-  total.append(&mut find_tokens(&f, "int", TokenType::IntKeyword));
-  total.append(&mut find_tokens(&f, "return", TokenType::ReturnKeyword));
-  total.append(&mut find_tokens(
+  total.append(&mut get_tokens_unique_string(&f, TokenType::OBrace));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::CBrace));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::OParen));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::CParen));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::Semicolon));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::IntKeyword));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::ReturnKeyword));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::Identifier));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::Integer));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::Negation));
+  total.append(&mut get_tokens_unique_string(
     &f,
-    "\\b([a-zA-Z_]+)\\b(?<!int|return|if|else|for|do|while|continue|break)",
-    TokenType::Identifier,
+    TokenType::BitwiseComplement,
   ));
-  total.append(&mut find_tokens(&f, "[0-9]+", TokenType::Integer));
-  total.append(&mut find_tokens(
+  total.append(&mut get_tokens_unique_string(
     &f,
-    "(?<=\\s)-(?=[0-9|a-zA-Z]|\\s)",
-    TokenType::Negation,
-  ));
-  total.append(&mut find_tokens(&f, "~", TokenType::BitwiseComplement));
-  total.append(&mut find_tokens(
-    &f,
-    "!(?=[0-9|a-zA-Z])",
     TokenType::LogicalNegation,
   ));
-  total.append(&mut find_tokens(&f, "\\s\\+\\s", TokenType::Addition));
-  total.append(&mut find_tokens(&f, "\\s\\*\\s", TokenType::Multiplication));
-  total.append(&mut find_tokens(&f, "\\s/\\s", TokenType::Division));
-  total.append(&mut find_tokens(&f, "\\s&&\\s", TokenType::And));
-  total.append(&mut find_tokens(&f, "\\|\\|", TokenType::Or));
-  total.append(&mut find_tokens(&f, "\\s==\\s", TokenType::Equal));
-  total.append(&mut find_tokens(&f, "\\s!=\\s", TokenType::NotEqual));
-  total.append(&mut find_tokens(&f, "\\s<\\s", TokenType::LessThan));
-  total.append(&mut find_tokens(&f, "\\s<=\\s", TokenType::LessThanOrEqual));
-  total.append(&mut find_tokens(&f, "\\s>\\s", TokenType::GreaterThan));
-  total.append(&mut find_tokens(
+  total.append(&mut get_tokens_default_string(&f, TokenType::Addition));
+  total.append(&mut get_tokens_default_string(
     &f,
-    "\\s>=\\s",
+    TokenType::Multiplication,
+  ));
+  total.append(&mut get_tokens_default_string(&f, TokenType::Division));
+  total.append(&mut get_tokens_default_string(&f, TokenType::And));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::Or));
+  total.append(&mut get_tokens_default_string(&f, TokenType::Equal));
+  total.append(&mut get_tokens_default_string(&f, TokenType::NotEqual));
+  total.append(&mut get_tokens_default_string(&f, TokenType::LessThan));
+  total.append(&mut get_tokens_default_string(
+    &f,
+    TokenType::LessThanOrEqual,
+  ));
+  total.append(&mut get_tokens_default_string(&f, TokenType::GreaterThan));
+  total.append(&mut get_tokens_default_string(
+    &f,
     TokenType::GreaterThanOrEqual,
   ));
-  total.append(&mut find_tokens(&f, ",", TokenType::Comma));
-  total.append(&mut find_tokens(&f, "\\s%\\s", TokenType::Modulo));
-  total.append(&mut find_tokens(&f, "\\s&\\s", TokenType::BitwiseAnd));
-  total.append(&mut find_tokens(&f, "\\s\\|\\s", TokenType::BitwiseOr));
-  total.append(&mut find_tokens(&f, "\\^\\s", TokenType::BitwiseXor));
-  total.append(&mut find_tokens(&f, "\\s<<\\s", TokenType::BitwiseShl));
-  total.append(&mut find_tokens(&f, "\\s>>\\s", TokenType::BitwiseShr));
-  total.append(&mut find_tokens(&f, "\\s=\\s", TokenType::Assignment));
-  total.append(&mut find_tokens(&f, "\\s\\+=\\s", TokenType::AddAssign));
-  total.append(&mut find_tokens(&f, "\\s-=\\s", TokenType::SubAssign));
-  total.append(&mut find_tokens(&f, "\\s\\*=\\s", TokenType::MulAssign));
-  total.append(&mut find_tokens(&f, "\\s/=\\s", TokenType::DivAssign));
-  total.append(&mut find_tokens(&f, "\\s%=\\s", TokenType::ModAssign));
-  total.append(&mut find_tokens(&f, "\\s<<=\\s", TokenType::ShlAssign));
-  total.append(&mut find_tokens(&f, "\\s>>=\\s", TokenType::ShrAssign));
-  total.append(&mut find_tokens(&f, "\\s&=\\s", TokenType::AndAssign));
-  total.append(&mut find_tokens(&f, "\\s\\|=\\s", TokenType::OrAssign));
-  total.append(&mut find_tokens(&f, "\\s\\^=\\s", TokenType::XorAssign));
-  total.append(&mut find_tokens(
+  total.append(&mut get_tokens_default_string(&f, TokenType::Comma));
+  total.append(&mut get_tokens_default_string(&f, TokenType::Modulo));
+  total.append(&mut get_tokens_default_string(&f, TokenType::BitwiseAnd));
+  total.append(&mut get_tokens_default_string(&f, TokenType::BitwiseOr));
+  total.append(&mut get_tokens_default_string(&f, TokenType::BitwiseXor));
+  total.append(&mut get_tokens_default_string(&f, TokenType::BitwiseShl));
+  total.append(&mut get_tokens_default_string(&f, TokenType::BitwiseShr));
+  total.append(&mut get_tokens_default_string(&f, TokenType::Assignment));
+  total.append(&mut get_tokens_default_string(&f, TokenType::AddAssign));
+  total.append(&mut get_tokens_default_string(&f, TokenType::SubAssign));
+  total.append(&mut get_tokens_default_string(&f, TokenType::MulAssign));
+  total.append(&mut get_tokens_default_string(&f, TokenType::DivAssign));
+  total.append(&mut get_tokens_default_string(&f, TokenType::ModAssign));
+  total.append(&mut get_tokens_default_string(&f, TokenType::ShlAssign));
+  total.append(&mut get_tokens_default_string(&f, TokenType::ShrAssign));
+  total.append(&mut get_tokens_default_string(&f, TokenType::AndAssign));
+  total.append(&mut get_tokens_default_string(&f, TokenType::OrAssign));
+  total.append(&mut get_tokens_default_string(&f, TokenType::XorAssign));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::PreIncrement));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::PostIncrement));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::PreDecrement));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::PostDecrement));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::IfKeyword));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::ElseKeyword));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::Colon));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::QuestionMark));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::ForKeyword));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::DoKeyword));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::WhileKeyword));
+  total.append(&mut get_tokens_unique_string(&f, TokenType::BreakKeyword));
+  total.append(&mut get_tokens_unique_string(
     &f,
-    "\\+\\+(?=[0-9|a-zA-Z])",
-    TokenType::PreIncrement,
+    TokenType::ContinueKeyword,
   ));
-  total.append(&mut find_tokens(
-    &f,
-    "(?<=[0-9|a-zA-Z])\\+\\+",
-    TokenType::PostIncrement,
-  ));
-  total.append(&mut find_tokens(
-    &f,
-    "--(?=[0-9|a-zA-Z])",
-    TokenType::PreDecrement,
-  ));
-  total.append(&mut find_tokens(
-    &f,
-    "(?<=[0-9|a-zA-Z])--",
-    TokenType::PostDecrement,
-  ));
-  total.append(&mut find_tokens(&f, "if", TokenType::IfKeyword));
-  total.append(&mut find_tokens(&f, "else", TokenType::ElseKeyword));
-  total.append(&mut find_tokens(&f, ":", TokenType::Colon));
-  total.append(&mut find_tokens(&f, "\\?", TokenType::QuestionMark));
-  total.append(&mut find_tokens(&f, "for", TokenType::ForKeyword));
-  total.append(&mut find_tokens(&f, "do", TokenType::DoKeyword));
-  total.append(&mut find_tokens(&f, "while", TokenType::WhileKeyword));
-  total.append(&mut find_tokens(&f, "break", TokenType::BreakKeyword));
-  total.append(&mut find_tokens(&f, "continue", TokenType::ContinueKeyword));
   total.sort();
   debug!("{:?}", total);
   total
+}
+
+fn get_tokens_default_string(f: &String, operator: TokenType) -> Vec<Token> {
+  let string = format!(
+    "(?<=[a-zA-Z|0-9\\s]){}(?=[a-zA-Z|0-9/\\s])",
+    operator.to_regex()
+  );
+  find_tokens(f, &string, operator)
+}
+
+fn get_tokens_unique_string(f: &String, operator: TokenType) -> Vec<Token> {
+  find_tokens(f, &operator.to_regex(), operator)
 }
 
 fn find_tokens(f: &String, value: &str, token_type: TokenType) -> Vec<Token> {
