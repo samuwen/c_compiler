@@ -1,5 +1,4 @@
 use crate::{Token, TokenType};
-use log::*;
 use onig::{FindMatches, Regex};
 
 pub fn lex(f: String) -> Vec<Token> {

@@ -38,6 +38,7 @@ fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
     TokenType::IntKeyword => {
       let token = get_next_token(tokens);
       check_type(&TokenType::Identifier, &token);
+      n.add_data(token.get_value());
       let mut next = peek_next_token(tokens);
       while next.get_type() == &TokenType::Comma {
         get_next_token(tokens);
@@ -57,7 +58,6 @@ fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   check_type(&TokenType::OBrace, &token);
   let mut next = peek_next_token(tokens);
   while next.get_type() != &TokenType::CBrace {
-    // <block-item> ::= <statement> | <declaration>
     let block_item = parse_block_item(tokens);
     n.add_child(block_item);
     next = peek_next_token(tokens);
@@ -550,7 +550,8 @@ fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
     | TokenType::PreDecrement
     | TokenType::PreIncrement => parse_unary_op(tokens),
     TokenType::Integer => parse_integer(tokens),
-    TokenType::Identifier => parse_variable(tokens),
+    TokenType::Identifier => parse_identifier(tokens),
+    // TODO - this is not actually hooked up to anything due to an upstream hijack
     TokenType::PostDecrement | TokenType::PostIncrement => parse_postfix(tokens),
     _ => panic!("Unexpected token: {:?}", next.get_type()),
   };
@@ -586,20 +587,39 @@ fn parse_integer(tokens: &mut Vec<Token>) -> Node<String> {
   n
 }
 
+fn parse_identifier(tokens: &mut Vec<Token>) -> Node<String> {
+  let next = tokens.get(1).expect("Unexpected end of input");
+  match next.get_type() {
+    TokenType::OParen => parse_function_call(tokens),
+    _ => parse_variable(tokens),
+  }
+}
+
 fn parse_variable(tokens: &mut Vec<Token>) -> Node<String> {
-  let mut n = Node::new(NodeType::Variable);
-  let token = get_next_token(tokens);
-  check_type(&TokenType::Identifier, &token);
-  n.add_data(token.get_value());
-  n
+  let mut variable = Node::new(NodeType::Variable);
+  let token = get_next_checked(&TokenType::Identifier, tokens);
+  variable.add_data(token.get_value());
+  variable
 }
 
 fn parse_postfix(tokens: &mut Vec<Token>) -> Node<String> {
   todo!();
 }
 
+// <function-call> ::= id "(" [ <exp> { "," <exp> } ] ")"
 fn parse_function_call(tokens: &mut Vec<Token>) -> Node<String> {
-  todo!();
+  let mut function_call = Node::new(NodeType::FunctionCall);
+  let token = get_next_checked(&TokenType::Identifier, tokens);
+  function_call.add_data(token.get_value());
+  get_next_checked(&TokenType::OParen, tokens);
+  get_next_checked(&TokenType::CParen, tokens);
+  function_call
+}
+
+fn get_next_checked(expected: &TokenType, tokens: &mut Vec<Token>) -> Token {
+  let token = get_next_token(tokens);
+  check_type(expected, &token);
+  token
 }
 
 fn check_type(expected: &TokenType, actual: &Token) {

@@ -645,6 +645,7 @@ pub enum NodeType {
   Variable,
   Assignment,
   Conditional,
+  FunctionCall,
 }
 
 #[derive(Debug)]

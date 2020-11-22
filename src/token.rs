@@ -352,8 +352,14 @@ impl TokenType {
       TokenType::OParen => "\\(",
       TokenType::CParen => "\\)",
       TokenType::Semicolon => ";",
+      // TODO: make sure keywords can't show up in identifier names and vice versa
       TokenType::IntKeyword => "int",
       TokenType::ReturnKeyword => "return",
+      TokenType::DoKeyword => "do",
+      TokenType::ForKeyword => "for",
+      TokenType::WhileKeyword => "while",
+      TokenType::BreakKeyword => "break",
+      TokenType::ContinueKeyword => "continue",
       TokenType::Identifier => {
         "\\b([a-zA-Z_]+)\\b(?<!int|return|if|else|for|do|while|continue|break)"
       }
@@ -398,11 +404,6 @@ impl TokenType {
       TokenType::ElseKeyword => "else",
       TokenType::Colon => ":",
       TokenType::QuestionMark => "\\?",
-      TokenType::DoKeyword => "do",
-      TokenType::ForKeyword => "for",
-      TokenType::WhileKeyword => "while",
-      TokenType::BreakKeyword => "break",
-      TokenType::ContinueKeyword => "continue",
     })
   }
 }
