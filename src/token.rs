@@ -182,6 +182,13 @@ impl Token {
       ),
     }
   }
+
+  pub fn is_function_keyword(&self) -> bool {
+    match self.get_type() {
+      TokenType::IntKeyword => true,
+      _ => false,
+    }
+  }
 }
 
 impl PartialOrd for Token {

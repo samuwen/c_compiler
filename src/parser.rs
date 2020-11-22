@@ -9,13 +9,19 @@ pub fn parse(mut tokens: Vec<Token>) -> Tree {
   tree
 }
 
+// <program> ::= { <function> }
 fn parse_program(tokens: &mut Vec<Token>) -> Node<String> {
   let mut n = Node::new(NodeType::Program);
-  n.add_child(parse_function(tokens));
+  let function = parse_function(tokens);
+  n.add_child(function);
+  while is_next_token_valid(tokens) {
+    let function = parse_function(tokens);
+    n.add_child(function);
+  }
   n
 }
 
-// <function> ::= "int" <id> "(" ")" "{" { <block-item> } "}"
+// <function> ::= "int" <id> "(" [ "int" <id> { ","  "int" <id> } ] ")" ( "{" { <block-item> } "}" | ";" )
 fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   let mut n = Node::new(NodeType::Function);
   let token = get_next_token(tokens);
@@ -27,7 +33,26 @@ fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   let token = get_next_token(tokens);
   check_type(&TokenType::OParen, &token);
   let token = get_next_token(tokens);
-  check_type(&TokenType::CParen, &token);
+  match token.get_type() {
+    TokenType::CParen => (),
+    TokenType::IntKeyword => {
+      let token = get_next_token(tokens);
+      check_type(&TokenType::Identifier, &token);
+      let mut next = peek_next_token(tokens);
+      while next.get_type() == &TokenType::Comma {
+        get_next_token(tokens);
+        let token = get_next_token(tokens);
+        check_type(&TokenType::IntKeyword, &token);
+        let token = get_next_token(tokens);
+        check_type(&TokenType::Identifier, &token);
+        n.add_data(token.get_value());
+        next = peek_next_token(tokens);
+      }
+      let token = get_next_token(tokens);
+      check_type(&TokenType::CParen, &token);
+    }
+    _ => panic!("Expected CParen or Int, got {:?}", token.get_type()),
+  }
   let token = get_next_token(tokens);
   check_type(&TokenType::OBrace, &token);
   let mut next = peek_next_token(tokens);
@@ -296,6 +321,7 @@ fn parse_assignment_expression(tokens: &mut Vec<Token>) -> Node<String> {
     let op_token = get_next_token(tokens);
     let mut assignment = Node::new(NodeType::Assignment);
     assignment.add_data(or_exp.get_data().get(0).expect("No data found").to_owned());
+    // TODO - fix postfix precedence
     match op_token.is_postfix() {
       true => {
         let mut unary_op = Node::new(NodeType::UnaryOp);
@@ -507,7 +533,7 @@ fn parse_term(tokens: &mut Vec<Token>) -> Node<String> {
   factor
 }
 
-// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
+// <factor> ::= <function-call> | "(" <exp> ")" | <unary_op> <factor> | <int> | <id> | <postfix>
 fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
   let next = peek_next_token(tokens);
   let expression = match next.get_type() {
@@ -525,6 +551,7 @@ fn parse_factor(tokens: &mut Vec<Token>) -> Node<String> {
     | TokenType::PreIncrement => parse_unary_op(tokens),
     TokenType::Integer => parse_integer(tokens),
     TokenType::Identifier => parse_variable(tokens),
+    TokenType::PostDecrement | TokenType::PostIncrement => parse_postfix(tokens),
     _ => panic!("Unexpected token: {:?}", next.get_type()),
   };
   expression
@@ -567,6 +594,14 @@ fn parse_variable(tokens: &mut Vec<Token>) -> Node<String> {
   n
 }
 
+fn parse_postfix(tokens: &mut Vec<Token>) -> Node<String> {
+  todo!();
+}
+
+fn parse_function_call(tokens: &mut Vec<Token>) -> Node<String> {
+  todo!();
+}
+
 fn check_type(expected: &TokenType, actual: &Token) {
   if expected != actual.get_type() {
     panic!(
@@ -583,6 +618,10 @@ fn get_next_token(tokens: &mut Vec<Token>) -> Token {
 
 fn peek_next_token(tokens: &mut Vec<Token>) -> Token {
   tokens.get(0).expect("Unexpected end of input").clone()
+}
+
+fn is_next_token_valid(tokens: &mut Vec<Token>) -> bool {
+  tokens.get(0).is_some()
 }
 
 pub struct Tree {
