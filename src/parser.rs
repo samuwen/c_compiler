@@ -21,32 +21,26 @@ fn parse_program(tokens: &mut Vec<Token>) -> Node<String> {
   n
 }
 
-// <function> ::= "int" <id> "(" [ "int" <id> { ","  "int" <id> } ] ")" ( "{" { <block-item> } "}" | ";" )
+// <function> ::= "int" <id> "(" [ "int" <id> { "," "int" <id> } ] ")" ( "{" { <block-item> } "}" | ";" )
 fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
   let mut n = Node::new(NodeType::Function);
-  let token = get_next_token(tokens);
-  check_type(&TokenType::IntKeyword, &token);
-  let token = get_next_token(tokens);
-  check_type(&TokenType::Identifier, &token);
-  let id = token.get_value();
+  get_next_checked(&TokenType::IntKeyword, tokens);
+  let id_token = get_next_checked(&TokenType::Identifier, tokens);
+  let id = id_token.get_value();
   n.add_data(id);
-  let token = get_next_token(tokens);
-  check_type(&TokenType::OParen, &token);
+  get_next_checked(&TokenType::OParen, tokens);
   let token = get_next_token(tokens);
   match token.get_type() {
     TokenType::CParen => (),
     TokenType::IntKeyword => {
-      let token = get_next_token(tokens);
-      check_type(&TokenType::Identifier, &token);
-      n.add_data(token.get_value());
+      let arg_name = get_next_checked(&TokenType::Identifier, tokens);
+      n.add_data(arg_name.get_value());
       let mut next = peek_next_token(tokens);
       while next.get_type() == &TokenType::Comma {
         get_next_token(tokens);
-        let token = get_next_token(tokens);
-        check_type(&TokenType::IntKeyword, &token);
-        let token = get_next_token(tokens);
-        check_type(&TokenType::Identifier, &token);
-        n.add_data(token.get_value());
+        get_next_checked(&TokenType::IntKeyword, tokens);
+        let arg_name = get_next_checked(&TokenType::Identifier, tokens);
+        n.add_data(arg_name.get_value());
         next = peek_next_token(tokens);
       }
       let token = get_next_token(tokens);
@@ -54,16 +48,23 @@ fn parse_function(tokens: &mut Vec<Token>) -> Node<String> {
     }
     _ => panic!("Expected CParen or Int, got {:?}", token.get_type()),
   }
-  let token = get_next_token(tokens);
-  check_type(&TokenType::OBrace, &token);
-  let mut next = peek_next_token(tokens);
-  while next.get_type() != &TokenType::CBrace {
-    let block_item = parse_block_item(tokens);
-    n.add_child(block_item);
-    next = peek_next_token(tokens);
+  let next = peek_next_token(tokens);
+  match next.get_type() {
+    TokenType::OBrace => {
+      get_next_checked(&TokenType::OBrace, tokens);
+      let mut next = peek_next_token(tokens);
+      while next.get_type() != &TokenType::CBrace {
+        let block_item = parse_block_item(tokens);
+        n.add_child(block_item);
+        next = peek_next_token(tokens);
+      }
+      get_next_checked(&TokenType::CBrace, tokens);
+    }
+    TokenType::Semicolon => {
+      get_next_checked(&TokenType::Semicolon, tokens);
+    }
+    _ => panic!("Expected brace or semicolon, got {:?}", token.get_type()),
   }
-  let token = get_next_token(tokens);
-  check_type(&TokenType::CBrace, &token);
   n
 }
 
@@ -612,7 +613,16 @@ fn parse_function_call(tokens: &mut Vec<Token>) -> Node<String> {
   let token = get_next_checked(&TokenType::Identifier, tokens);
   function_call.add_data(token.get_value());
   get_next_checked(&TokenType::OParen, tokens);
-  get_next_checked(&TokenType::CParen, tokens);
+  let next = peek_next_token(tokens);
+  match next.get_type() {
+    TokenType::CParen => {
+      get_next_checked(&TokenType::CParen, tokens);
+    }
+    _ => {
+      parse_comma_expression(tokens);
+      get_next_checked(&TokenType::CParen, tokens);
+    }
+  }
   function_call
 }
 
